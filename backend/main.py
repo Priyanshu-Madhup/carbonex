@@ -207,7 +207,7 @@ def generate_emission_charts(organization_id: str) -> Dict[str, str]:
         # Read historical data
         df = pd.read_csv(csv_path)
         org_data = df[df['organization_id'] == organization_id].copy()
-        org_data['week_start_date'] = pd.to_datetime(org_data['week_start_date'])
+        org_data['week_start_date'] = pd.to_datetime(org_data['week_start_date'], format='%d-%m-%Y', dayfirst=True)
         org_data = org_data.sort_values('week_start_date')
         last_52_weeks = org_data.tail(52)
         
@@ -996,7 +996,7 @@ async def get_historical_data(organization_id: str, session_token: str = None):
             raise HTTPException(status_code=404, detail=f"No data found for organization {organization_id}")
         
         # Sort by date
-        org_data['week_start_date'] = pd.to_datetime(org_data['week_start_date'])
+        org_data['week_start_date'] = pd.to_datetime(org_data['week_start_date'], format='%d-%m-%Y', dayfirst=True)
         org_data = org_data.sort_values('week_start_date')
         
         # Get the last 52 weeks of historical data (or all if less than 52)

@@ -5,6 +5,7 @@ import Signup from './components/Signup';
 import OrganizationSetup from './components/OrganizationSetup';
 import Recommendations from './components/Recommendations';
 import Dashboard from './components/Dashboard';
+import logoImage from './assets/carbonex.png';
 
 function App() {
   const [showLogin, setShowLogin] = useState(false);
@@ -130,7 +131,7 @@ function App() {
       <nav className="navbar">
         <div className="nav-container">
           <div className="logo">
-            <span className="logo-icon">🌿</span>
+            <img src={logoImage} alt="CarbonEx" className="logo-image" />
             <span className="logo-text">CarbonEx</span>
           </div>
           <div className="nav-links">
@@ -193,7 +194,6 @@ function App() {
         <div className="hero-container">
           <div className="hero-left">
             <div className="hero-badge">
-              <span className="badge-icon">🌿</span>
               <span className="badge-text">AI-Powered Carbon Management</span>
             </div>
             <h1 className="hero-title">
@@ -218,16 +218,6 @@ function App() {
                 <div className="stat-number">98%</div>
                 <div className="stat-label">Accuracy</div>
               </div>
-            </div>
-            <div className="hero-buttons">
-              <button className="btn-primary">
-                <span>Get Started</span>
-                <span className="btn-arrow">→</span>
-              </button>
-              <button className="btn-outline">
-                <span className="btn-icon">▶</span>
-                Watch Demo
-              </button>
             </div>
           </div>
           <div className="hero-right">
@@ -256,14 +246,12 @@ function App() {
                 </div>
                 <div className="dash-metrics">
                   <div className="metric-item">
-                    <span className="metric-icon">🌳</span>
                     <div className="metric-info">
                       <div className="metric-label">Carbon Offset</div>
                       <div className="metric-value">1,240 tons</div>
                     </div>
                   </div>
                   <div className="metric-item">
-                    <span className="metric-icon">⚡</span>
                     <div className="metric-info">
                       <div className="metric-label">Energy Saved</div>
                       <div className="metric-value">34% ↓</div>
@@ -283,22 +271,18 @@ function App() {
           <h2 className="section-title">Intelligent Carbon Management</h2>
           <div className="features-grid">
             <div className="feature-card">
-              <div className="feature-icon">🌿</div>
               <h3>Real-time Monitoring</h3>
               <p>Track emissions across all operations with precision.</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">⚙️</div>
               <h3>AI-Powered Insights</h3>
               <p>Get actionable recommendations powered by machine learning.</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">📊</div>
               <h3>Advanced Analytics</h3>
               <p>Visualize trends and predict future carbon footprint.</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">💡</div>
               <h3>Smart Optimization</h3>
               <p>Automated strategies to reduce emissions efficiently.</p>
             </div>
@@ -334,7 +318,6 @@ function App() {
                 "EcoSphere AI helped us reduce emissions by 35% in just 6 months."
               </div>
               <div className="testimonial-author">
-                <div className="author-avatar">👤</div>
                 <div>
                   <div className="author-name">Sarah Chen</div>
                   <div className="author-role">Sustainability Director, TechCorp</div>
@@ -346,7 +329,6 @@ function App() {
                 "The AI predictions are incredibly accurate. A game-changer for our ESG goals."
               </div>
               <div className="testimonial-author">
-                <div className="author-avatar">👤</div>
                 <div>
                   <div className="author-name">Michael Rodriguez</div>
                   <div className="author-role">CEO, GreenVentures</div>

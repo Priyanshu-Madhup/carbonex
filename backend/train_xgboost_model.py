@@ -32,9 +32,9 @@ class EmissionForecaster:
         
         # Use existing date column or convert week_start_date
         if 'date' not in df.columns and 'week_start_date' in df.columns:
-            df['date'] = pd.to_datetime(df['week_start_date'])
+            df['date'] = pd.to_datetime(df['week_start_date'], format='%d-%m-%Y', dayfirst=True)
         else:
-            df['date'] = pd.to_datetime(df['date'])
+            df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y', dayfirst=True)
         
         # Sort by organization and date
         df = df.sort_values(['organization_id', 'date'])
@@ -288,9 +288,9 @@ class EmissionForecaster:
         
         # Use week_start_date if available, otherwise use date
         if 'date' in org_data.columns:
-            org_data['date'] = pd.to_datetime(org_data['date'])
+            org_data['date'] = pd.to_datetime(org_data['date'], format='%d-%m-%Y', dayfirst=True)
         elif 'week_start_date' in org_data.columns:
-            org_data['date'] = pd.to_datetime(org_data['week_start_date'])
+            org_data['date'] = pd.to_datetime(org_data['week_start_date'], format='%d-%m-%Y', dayfirst=True)
         else:
             raise ValueError("Dataset must have either 'date' or 'week_start_date' column")
         

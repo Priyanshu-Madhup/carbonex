@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Recommendations.css';
+import logoImage from '../assets/carbonex.png';
 
-function Recommendations({ onNavigateToDashboard, onNavigateToRecommendations, onNavigateToOrgSetup, onNavigateToHome, onBack, user, onLogout }) {
+function Recommendations({ user, onNavigateToDashboard, onNavigateToRecommendations, onNavigateToOrgSetup, onNavigateToHome, onBack, onLogout }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -172,7 +173,7 @@ function Recommendations({ onNavigateToDashboard, onNavigateToRecommendations, o
             }}
             style={{ cursor: 'pointer' }}
           >
-            <span className="logo-icon">🌿</span>
+            <img src={logoImage} alt="CarbonEx" className="logo-image" />
             <span className="logo-text">CarbonEx</span>
           </div>
           <div className="nav-links">

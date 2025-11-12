@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './OrganizationSetup.css';
+import logoImage from '../assets/carbonex.png';
 
 function OrganizationSetup({ onNavigateToDashboard, onNavigateToRecommendations, onNavigateToOrgSetup, onNavigateToHome, onComplete, onBack, user, onLogout }) {
   const [currentStep, setCurrentStep] = useState(0); // Start from step 0 for file upload
@@ -342,7 +343,7 @@ function OrganizationSetup({ onNavigateToDashboard, onNavigateToRecommendations,
               }}
               style={{ cursor: 'pointer' }}
             >
-              <span className="logo-icon">🌿</span>
+              <img src={logoImage} alt="CarbonEx" className="logo-image" />
               <span className="logo-text">CarbonEx</span>
             </div>
             <div className="nav-links">

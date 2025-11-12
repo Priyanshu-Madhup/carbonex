@@ -41,7 +41,7 @@ def generate_test_charts():
         # Read historical data
         df = pd.read_csv(csv_path)
         org_data = df[df['organization_id'] == organization_id].copy()
-        org_data['week_start_date'] = pd.to_datetime(org_data['week_start_date'])
+        org_data['week_start_date'] = pd.to_datetime(org_data['week_start_date'], format='%d-%m-%Y', dayfirst=True)
         org_data = org_data.sort_values('week_start_date')
         last_52_weeks = org_data.tail(52)
         

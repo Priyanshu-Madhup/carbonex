@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
+import logoImage from '../assets/carbonex.png';
 
 function Dashboard({ user, sessionToken, onNavigateToDashboard, onNavigateToRecommendations, onNavigateToOrgSetup, onNavigateToHome, onBack, onLogout }) {
   const [modelInfo, setModelInfo] = useState(null);
@@ -120,7 +121,7 @@ function Dashboard({ user, sessionToken, onNavigateToDashboard, onNavigateToReco
             }}
             style={{ cursor: 'pointer' }}
           >
-            <span className="logo-icon">🌿</span>
+            <img src={logoImage} alt="CarbonEx" className="logo-image" />
             <span className="logo-text">CarbonEx</span>
           </div>
           <div className="nav-links">
