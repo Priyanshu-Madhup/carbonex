@@ -192,13 +192,134 @@ def calculate_emissions(elec_kwh: float, renewable_kwh: float, grid_ef: float,
 
 
 # ====================
+# VARIATION & PATTERN FUNCTIONS
+# ====================
+
+def get_seasonal_multiplier(week_date: pd.Timestamp, week_idx: int) -> float:
+    """Add strong seasonal variation with cyclic patterns."""
+    month = week_date.month
+    week_in_year = week_date.isocalendar()[1]
+
+    # Base seasonal pattern (stronger variation)
+    if month in [5, 6, 7, 8]:  # Summer - high AC usage
+        base = np.random.uniform(1.4, 1.8)
+    elif month in [11, 12, 1, 2]:  # Winter - heating
+        base = np.random.uniform(1.3, 1.6)
+    elif month in [3, 4]:  # Spring
+        base = np.random.uniform(0.8, 1.1)
+    elif month in [9, 10]:  # Fall
+        base = np.random.uniform(0.9, 1.2)
+    else:
+        base = 1.0
+
+    # Add sinusoidal pattern for smooth transitions
+    sine_component = 0.3 * np.sin(2 * np.pi * week_in_year / 52)
+
+    return base + sine_component
+
+
+def get_trend_multiplier(week_idx: int, total_weeks: int) -> float:
+    """Add non-linear trend with growth spurts and improvement initiatives."""
+    # Non-linear quadratic growth
+    progress = week_idx / total_weeks
+    base_trend = 1.0 + 0.15 * progress + 0.35 * (progress ** 2)
+
+    # Quarterly cycles (13-week quarters)
+    quarter_cycle = 0.15 * np.sin(2 * np.pi * week_idx / 13)
+
+    # Major improvement initiatives (every 20-25 weeks)
+    if week_idx % 22 == 0 and week_idx > 0:
+        improvement = np.random.uniform(0.70, 0.85)
+        return base_trend * improvement + quarter_cycle
+
+    # Random growth spurts
+    if week_idx % 15 == 7:
+        growth_spurt = np.random.uniform(1.15, 1.35)
+        return base_trend * growth_spurt + quarter_cycle
+
+    return base_trend + quarter_cycle
+
+
+def get_weekly_variation() -> float:
+    """Add significant random weekly variation."""
+    # Use gamma distribution for skewed variation
+    return np.random.gamma(shape=2.0, scale=0.3) + 0.4
+
+
+def get_industry_emissions_profile(industry: str) -> Dict:
+    """Get industry-specific emission characteristics with higher volatility."""
+    profiles = {
+        "Energy": {"base_multiplier": 3.5, "volatility": 0.6},
+        "Manufacturing": {"base_multiplier": 2.8, "volatility": 0.5},
+        "Chemical": {"base_multiplier": 2.5, "volatility": 0.45},
+        "Automotive": {"base_multiplier": 2.3, "volatility": 0.5},
+        "Transport": {"base_multiplier": 2.6, "volatility": 0.55},
+        "Food Processing": {"base_multiplier": 1.8, "volatility": 0.4},
+        "Pharma": {"base_multiplier": 1.6, "volatility": 0.35},
+        "Tech": {"base_multiplier": 0.6, "volatility": 0.25},
+        "Finance": {"base_multiplier": 0.4, "volatility": 0.2},
+        "Retail": {"base_multiplier": 1.2, "volatility": 0.35},
+        "Healthcare": {"base_multiplier": 1.4, "volatility": 0.3},
+        "Education": {"base_multiplier": 0.7, "volatility": 0.25},
+        "Hospitality": {"base_multiplier": 1.5, "volatility": 0.4},
+        "Construction": {"base_multiplier": 2.2, "volatility": 0.5},
+        "Agriculture": {"base_multiplier": 1.7, "volatility": 0.4},
+        "Textiles": {"base_multiplier": 1.9, "volatility": 0.45},
+    }
+    return profiles.get(industry, {"base_multiplier": 1.0, "volatility": 0.3})
+
+
+def add_special_events(week_date: pd.Timestamp, week_idx: int) -> float:
+    """Add dramatic special event spikes and drops."""
+    # Holiday periods - major reduced operations
+    if week_date.month == 12 and week_date.day > 20:
+        return np.random.uniform(0.25, 0.45)
+
+    # Year-end rush (significant spike)
+    if week_date.month == 11 or (week_date.month == 12 and week_date.day <= 15):
+        return np.random.uniform(1.5, 2.0)
+
+    # Random maintenance/shutdown weeks (10% probability - more dramatic)
+    if np.random.rand() < 0.10:
+        return np.random.uniform(0.2, 0.5)
+
+    # Random high production weeks (12% probability - bigger spikes)
+    if np.random.rand() < 0.12:
+        return np.random.uniform(1.6, 2.2)
+
+    # Supply chain disruptions (5% probability)
+    if np.random.rand() < 0.05:
+        return np.random.uniform(0.6, 0.8)
+
+    # Major orders/events (5% probability)
+    if np.random.rand() < 0.05:
+        return np.random.uniform(1.8, 2.5)
+
+    return 1.0
+
+
+def add_cyclical_patterns(week_idx: int) -> float:
+    """Add multiple cyclical patterns at different frequencies."""
+    # Monthly cycle (4-week)
+    monthly = 0.15 * np.sin(2 * np.pi * week_idx / 4)
+
+    # Bi-weekly cycle
+    biweekly = 0.10 * np.cos(2 * np.pi * week_idx / 2)
+
+    # Long-term cycle (26-week/half-year)
+    longterm = 0.20 * np.sin(2 * np.pi * week_idx / 26)
+
+    return 1.0 + monthly + biweekly + longterm
+
+
+# ====================
 # MAIN GENERATION LOGIC
 # ====================
 
 rows = []
 record_counter = 0
 
-for week_date in weeks:
+for week_idx, week_date in enumerate(weeks):
     # Randomly select facilities to have records this week
     n_facilities_this_week = np.random.randint(
         FACILITIES_PER_WEEK_MIN, FACILITIES_PER_WEEK_MAX)
@@ -222,33 +343,48 @@ for week_date in weeks:
         days_options, days_probs = params['operating_days_probs']
         operating_days = np.random.choice(days_options, p=days_probs)
 
+        # APPLY VARIATION MULTIPLIERS
+        seasonal_mult = get_seasonal_multiplier(week_date, week_idx)
+        trend_mult = get_trend_multiplier(week_idx, n_weeks)
+        weekly_var = get_weekly_variation()
+        cyclical_mult = add_cyclical_patterns(week_idx)
+        industry_profile = get_industry_emissions_profile(industry_sector)
+        industry_mult = industry_profile['base_multiplier']
+        industry_volatility = industry_profile['volatility']
+        event_mult = add_special_events(week_date, week_idx)
+
+        # Combined multiplier with all variation sources
+        combined_multiplier = (seasonal_mult * trend_mult * weekly_var *
+                               cyclical_mult * industry_mult * event_mult *
+                               np.random.uniform(1 - industry_volatility, 1 + industry_volatility))
+
         # WEEKLY AGGREGATED VALUES
 
-        # Energy/electricity (kWh) - weekly total
+        # Energy/electricity (kWh) - weekly total with variation
         elec_kwh_daily = max(0, np.random.normal(
-            loc=base_elec_daily, scale=base_elec_daily*0.25))
+            loc=base_elec_daily, scale=base_elec_daily*0.25)) * combined_multiplier
         elec_kwh = round(elec_kwh_daily * operating_days, 2)
         renewable_kwh = round(elec_kwh * np.random.beta(1.5, 6.0), 2)
         grid_ef = round(np.random.normal(0.82, 0.05), 3)
         elec_cost = round(elec_kwh * np.random.normal(9.5, 1.2), 2)
 
-        # Fuel usage - weekly total
+        # Fuel usage - weekly total with variation
         fuel_type = np.random.choice(FUEL_TYPES, p=FUEL_TYPE_PROBS)
         if np.random.rand() < 0.55:
             fuel_daily = abs(np.random.normal(
-                loc=50 if 'Plant' in facility else 20, scale=25))
+                loc=50 if 'Plant' in facility else 20, scale=25)) * combined_multiplier
             fuel_consumed = round(fuel_daily * operating_days, 2)
         else:
             fuel_consumed = 0.0
         fuel_ef = FUEL_EF_MAP[fuel_type]
         generator_hours = round(np.random.exponential(
-            scale=2.0) * operating_days, 2) if fuel_consumed > 0 else 0.0
+            scale=2.0) * operating_days * combined_multiplier, 2) if fuel_consumed > 0 else 0.0
 
-        # Fleet data - weekly totals
+        # Fleet data - weekly totals with variation
         if np.random.rand() < 0.3:
             vehicle = random.choice(VEHICLE_IDS)
             distance_km = round(abs(np.random.normal(
-                loc=120, scale=80)) * operating_days, 2)
+                loc=120, scale=80)) * operating_days * combined_multiplier, 2)
             vehicle_fuel = round(
                 distance_km / np.random.normal(loc=10.0, scale=1.5), 2)
         else:
@@ -256,12 +392,14 @@ for week_date in weeks:
             distance_km = 0.0
             vehicle_fuel = 0.0
 
-        # Weekly average occupancy rate
-        occupancy_rate = round(np.random.uniform(30, 95), 1)
+        # Weekly average occupancy rate with variation
+        base_occupancy = 65 if event_mult < 0.8 else 80  # Lower during events/shutdowns
+        occupancy_rate = round(np.clip(base_occupancy * combined_multiplier *
+                                       np.random.uniform(0.7, 1.1), 10, 100), 1)
 
-        # Production/activity - weekly total
+        # Production/activity - weekly total with variation
         product_output_daily = max(1, int(np.random.normal(
-            loc=base_product_daily, scale=base_product_daily*0.3)))
+            loc=base_product_daily, scale=base_product_daily*0.3) * combined_multiplier))
         product_output = product_output_daily * operating_days
         product_output = max(0, product_output)
 
@@ -284,11 +422,11 @@ for week_date in weeks:
         daily_hours = np.random.choice([8, 9, 10, 12], p=[0.4, 0.3, 0.2, 0.1])
         working_hours_per_week = round(daily_hours * operating_days, 2)
 
-        # Supply chain / spend - weekly total
+        # Supply chain / spend - weekly total with variation
         supplier = random.choice(SUPPLIERS)
         category = random.choice(PURCHASE_CATEGORIES)
         spend_daily = abs(np.random.normal(
-            loc=50000 if category == 'Raw material' else 15000, scale=30000))
+            loc=50000 if category == 'Raw material' else 15000, scale=30000) * combined_multiplier)
         spend = round(spend_daily * operating_days, 2)
         cat_ef = CATEGORY_EF[category]
 
