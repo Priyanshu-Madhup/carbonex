@@ -1,6 +1,6 @@
-# EcoSphere AI - Eco-Themed Landing Page
+# CarbonEx - Eco-Themed Landing Page
 
-A visually stunning, eco-themed landing page for EcoSphere AI platform with functional authentication system. Built with React and FastAPI.
+A visually stunning, eco-themed landing page for CarbonEx platform with functional authentication system. Built with React and FastAPI.
 
 ## Features
 

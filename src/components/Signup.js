@@ -57,16 +57,10 @@ function Signup({ onClose, onSwitchToLogin, onSignupSuccess }) {
         throw new Error(data.detail || 'Signup failed');
       }
 
-      // Store token in localStorage
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify({
-        id: data.id,
-        name: data.name,
-        email: data.email
-      }));
-
-      onSignupSuccess(data);
-      onClose();
+      // Don't store token - user needs to login
+      // Show success and redirect to login
+      onSignupSuccess();
+      
     } catch (err) {
       setError(err.message);
     } finally {
@@ -79,7 +73,7 @@ function Signup({ onClose, onSwitchToLogin, onSignupSuccess }) {
       <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
         <button className="close-btn" onClick={onClose}>✕</button>
         <div className="auth-header">
-          <h2>Join EcoSphere AI</h2>
+          <h2>Join CarbonEx</h2>
           <p>Start your journey to net-zero emissions</p>
         </div>
         

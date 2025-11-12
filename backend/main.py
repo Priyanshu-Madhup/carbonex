@@ -48,6 +48,33 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS organizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            organization_name TEXT NOT NULL,
+            industry TEXT NOT NULL,
+            num_employees INTEGER NOT NULL,
+            num_facilities INTEGER NOT NULL,
+            electricity INTEGER NOT NULL,
+            diesel INTEGER NOT NULL,
+            lpg INTEGER NOT NULL,
+            renewables INTEGER NOT NULL,
+            num_vehicles INTEGER,
+            fuel_usage INTEGER,
+            country TEXT NOT NULL,
+            city TEXT NOT NULL,
+            goal_year INTEGER NOT NULL,
+            reduction_goal INTEGER NOT NULL,
+            solar_panels BOOLEAN DEFAULT 0,
+            ev_fleet BOOLEAN DEFAULT 0,
+            green_procurement BOOLEAN DEFAULT 0,
+            carbon_offsets BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -68,6 +95,29 @@ class UserResponse(BaseModel):
     id: int
     name: str
     email: str
+    token: str
+
+class OrganizationSetup(BaseModel):
+    organizationName: str
+    industry: str
+    numEmployees: int
+    numFacilities: int
+    electricity: int
+    diesel: int
+    lpg: int
+    renewables: int
+    numVehicles: int = 0
+    fuelUsage: int = 0
+    country: str
+    city: str
+    goalYear: int
+    reductionGoal: int
+    solarPanels: bool = False
+    evFleet: bool = False
+    greenProcurement: bool = False
+    carbonOffsets: bool = False
+
+class LogoutRequest(BaseModel):
     token: str
 
 # Helper functions
@@ -194,9 +244,124 @@ async def logout(request: LogoutRequest):
     conn.close()
     return {"message": "Logged out successfully"}
 
+@app.post("/api/organization/setup")
+async def setup_organization(org: OrganizationSetup, token: str):
+    # Verify token and get user_id
+    user_id = verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Check if organization already exists for this user
+    cursor.execute("SELECT id FROM organizations WHERE user_id = ?", (user_id,))
+    existing = cursor.fetchone()
+    
+    if existing:
+        # Update existing organization
+        cursor.execute("""
+            UPDATE organizations SET
+                organization_name = ?,
+                industry = ?,
+                num_employees = ?,
+                num_facilities = ?,
+                electricity = ?,
+                diesel = ?,
+                lpg = ?,
+                renewables = ?,
+                num_vehicles = ?,
+                fuel_usage = ?,
+                country = ?,
+                city = ?,
+                goal_year = ?,
+                reduction_goal = ?,
+                solar_panels = ?,
+                ev_fleet = ?,
+                green_procurement = ?,
+                carbon_offsets = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+        """, (
+            org.organizationName, org.industry, org.numEmployees, org.numFacilities,
+            org.electricity, org.diesel, org.lpg, org.renewables,
+            org.numVehicles, org.fuelUsage, org.country, org.city,
+            org.goalYear, org.reductionGoal,
+            org.solarPanels, org.evFleet, org.greenProcurement, org.carbonOffsets,
+            user_id
+        ))
+    else:
+        # Insert new organization
+        cursor.execute("""
+            INSERT INTO organizations (
+                user_id, organization_name, industry, num_employees, num_facilities,
+                electricity, diesel, lpg, renewables, num_vehicles, fuel_usage,
+                country, city, goal_year, reduction_goal,
+                solar_panels, ev_fleet, green_procurement, carbon_offsets
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id, org.organizationName, org.industry, org.numEmployees, org.numFacilities,
+            org.electricity, org.diesel, org.lpg, org.renewables,
+            org.numVehicles, org.fuelUsage, org.country, org.city,
+            org.goalYear, org.reductionGoal,
+            org.solarPanels, org.evFleet, org.greenProcurement, org.carbonOffsets
+        ))
+    
+    conn.commit()
+    conn.close()
+    
+    return {"message": "Organization setup saved successfully"}
+
+@app.get("/api/organization")
+async def get_organization(token: str):
+    # Verify token and get user_id
+    user_id = verify_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT 
+            organization_name, industry, num_employees, num_facilities,
+            electricity, diesel, lpg, renewables, num_vehicles, fuel_usage,
+            country, city, goal_year, reduction_goal,
+            solar_panels, ev_fleet, green_procurement, carbon_offsets,
+            created_at, updated_at
+        FROM organizations WHERE user_id = ?
+    """, (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    
+    return {
+        "organizationName": result[0],
+        "industry": result[1],
+        "numEmployees": result[2],
+        "numFacilities": result[3],
+        "electricity": result[4],
+        "diesel": result[5],
+        "lpg": result[6],
+        "renewables": result[7],
+        "numVehicles": result[8],
+        "fuelUsage": result[9],
+        "country": result[10],
+        "city": result[11],
+        "goalYear": result[12],
+        "reductionGoal": result[13],
+        "solarPanels": bool(result[14]),
+        "evFleet": bool(result[15]),
+        "greenProcurement": bool(result[16]),
+        "carbonOffsets": bool(result[17]),
+        "createdAt": result[18],
+        "updatedAt": result[19]
+    }
+
 @app.get("/")
 async def root():
-    return {"message": "EcoSphere AI Backend API"}
+    return {"message": "CarbonEx Backend API"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -2,18 +2,13 @@ import React, { useEffect, useState } from 'react';
 import './App.css';
 import Login from './components/Login';
 import Signup from './components/Signup';
+import OrganizationSetup from './components/OrganizationSetup';
 
 function App() {
-  const [scrollY, setScrollY] = useState(0);
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
+  const [showOrgSetup, setShowOrgSetup] = useState(false);
   const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -28,8 +23,10 @@ function App() {
     setUser(userData);
   };
 
-  const handleSignupSuccess = (userData) => {
-    setUser(userData);
+  const handleSignupSuccess = () => {
+    // After successful signup, redirect to login page
+    setShowSignup(false);
+    setShowLogin(true);
   };
 
   const handleLogout = () => {
@@ -50,29 +47,37 @@ function App() {
 
   return (
     <div className="App">
-      {/* Auth Modals */}
-      {showLogin && (
-        <Login
-          onClose={() => setShowLogin(false)}
-          onSwitchToSignup={() => {
-            setShowLogin(false);
-            setShowSignup(true);
-          }}
-          onLoginSuccess={handleLoginSuccess}
+      {/* Show Organization Setup if activated */}
+      {showOrgSetup ? (
+        <OrganizationSetup
+          onComplete={() => setShowOrgSetup(false)}
+          onBack={() => setShowOrgSetup(false)}
         />
-      )}
-      {showSignup && (
-        <Signup
-          onClose={() => setShowSignup(false)}
-          onSwitchToLogin={() => {
-            setShowSignup(false);
-            setShowLogin(true);
-          }}
-          onSignupSuccess={handleSignupSuccess}
-        />
-      )}
+      ) : (
+        <>
+          {/* Auth Modals */}
+          {showLogin && (
+            <Login
+              onClose={() => setShowLogin(false)}
+              onSwitchToSignup={() => {
+                setShowLogin(false);
+                setShowSignup(true);
+              }}
+              onLoginSuccess={handleLoginSuccess}
+            />
+          )}
+          {showSignup && (
+            <Signup
+              onClose={() => setShowSignup(false)}
+              onSwitchToLogin={() => {
+                setShowSignup(false);
+                setShowLogin(true);
+              }}
+              onSignupSuccess={handleSignupSuccess}
+            />
+          )}
 
-      {/* Floating Background Elements */}
+          {/* Floating Background Elements */}
       <div className="floating-icons">
         <span className="float-icon leaf">🌿</span>
         <span className="float-icon earth">🌍</span>
@@ -86,19 +91,29 @@ function App() {
         <div className="nav-container">
           <div className="logo">
             <span className="logo-icon">🌿</span>
-            <span className="logo-text">EcoSphere AI</span>
+            <span className="logo-text">CarbonEx</span>
           </div>
           <div className="nav-links">
-            <a href="#home">Home</a>
-            <a href="#features">Features</a>
-            <a href="#dashboard">Dashboard</a>
             {user ? (
               <>
-                <span className="user-name">Hi, {user.name}!</span>
-                <button className="logout-btn" onClick={handleLogout}>Logout</button>
+                <a href="#dashboard" className="nav-tab">Dashboard</a>
+                <a href="#data-forecasting" className="nav-tab">Data & Forecasting</a>
+                <a href="#recommendations" className="nav-tab">Recommendations</a>
+                <a href="#organization" className="nav-tab" onClick={(e) => { e.preventDefault(); setShowOrgSetup(true); }}>
+                  Organization Setup
+                </a>
+                <a href="#settings" className="nav-tab">Settings</a>
+                <a href="#help" className="nav-tab">Help / Docs</a>
+                <div className="profile-dropdown">
+                  <span className="user-icon" title={user.name}>👤</span>
+                  <button className="logout-btn" onClick={handleLogout}>Logout</button>
+                </div>
               </>
             ) : (
               <>
+                <a href="#home">Home</a>
+                <a href="#features">Features</a>
+                <a href="#dashboard">Dashboard</a>
                 <button className="login-btn" onClick={() => setShowLogin(true)}>Login</button>
                 <button className="signup-btn" onClick={() => setShowSignup(true)}>Signup</button>
               </>
@@ -272,10 +287,12 @@ function App() {
             <span>♻️</span>
           </div>
           <div className="footer-copyright">
-            © 2025 EcoSphere AI. All rights reserved.
+            © 2025 CarbonEx. All rights reserved.
           </div>
         </div>
       </footer>
+        </>
+      )}
     </div>
   );
 }
