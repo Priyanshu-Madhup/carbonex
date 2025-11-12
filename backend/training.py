@@ -510,6 +510,68 @@ try:
     plt.close()
     logger.info(f"Saved plot: {plt_path3}")
 
+    # Plot 4: Time series prediction graph for entire dataset
+    fig, ax = plt.subplots(figsize=(16, 7))
+
+    # Get predictions for entire dataset
+    X_full_scaled = scaler.transform(imputer.transform(X))
+    y_full_pred = best_model.predict(X_full_scaled)
+
+    # Plot with train/test split indicated - enhanced styling
+    dates = df_encoded['date'].values
+
+    # Plot actual emissions with gradient effect
+    ax.plot(dates, y,
+            label='Actual Emissions', linewidth=2.5, color='#1e88e5',
+            alpha=0.9, marker='o', markersize=3, markevery=max(1, len(dates)//50))
+
+    # Plot predictions with distinct style
+    ax.plot(dates, y_full_pred,
+            label='Model Predictions', linewidth=2.5,
+            linestyle='--', color='#e53935', alpha=0.85,
+            marker='s', markersize=3, markevery=max(1, len(dates)//50))
+
+    # Highlight train/test regions with subtle background colors
+    ax.axvspan(dates[0], dates[split_idx], alpha=0.05,
+               color='blue', label='Training Period')
+    ax.axvspan(dates[split_idx], dates[-1], alpha=0.05,
+               color='green', label='Test Period')
+
+    # Add vertical line for train/test split
+    ax.axvline(x=dates[split_idx], color='#ff6f00',
+               linestyle='-.', linewidth=3, label='Train/Test Split', alpha=0.8)
+
+    # Enhanced title and labels
+    ax.set_title(f'Carbon Emission Forecast: Actual vs Predicted\n{best_model_name} Model (R² = {r2:.4f}, MAPE = {mape:.2f}%)',
+                 fontsize=16, fontweight='bold', pad=20)
+    ax.set_xlabel('Date', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Total Emissions (tCO2e)', fontsize=13, fontweight='bold')
+
+    # Improved legend
+    ax.legend(loc='upper left', framealpha=0.95, fontsize=11,
+              shadow=True, fancybox=True, ncol=2)
+
+    # Enhanced grid
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+    ax.set_facecolor('#fafafa')
+
+    # Format x-axis
+    plt.xticks(rotation=45, ha='right', fontsize=10)
+    plt.yticks(fontsize=10)
+
+    # Add metrics text box
+    metrics_text = f'MAE: {mae:.2f}\nRMSE: {rmse:.2f}\nMAPE: {mape:.2f}%'
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+    ax.text(0.98, 0.97, metrics_text, transform=ax.transAxes,
+            fontsize=10, verticalalignment='top', horizontalalignment='right',
+            bbox=props)
+
+    plt.tight_layout()
+    plt_path4 = os.path.join(output_dir, 'prediction_timeseries.png')
+    plt.savefig(plt_path4, dpi=200, facecolor='white', edgecolor='none')
+    plt.close()
+    logger.info(f"Saved plot: {plt_path4}")
+
 except Exception as e:
     logger.error(f"Visualization failed: {e}")
 
@@ -526,4 +588,5 @@ print(f"Actual vs Predicted plot: {plt_path1}")
 if plt_path2:
     print(f"Feature importance plot: {plt_path2}")
 print(f"Residuals distribution plot: {plt_path3}")
+print(f"Prediction time series plot: {plt_path4}")
 print(f"{'='*60}\n")
