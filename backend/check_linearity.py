@@ -29,19 +29,23 @@ df = pd.read_csv(csv_path)
 print(f"\n✓ Loaded dataset: {df.shape[0]:,} records")
 
 # Convert date
-if 'week_start_date' in df.columns:
-    df['date'] = pd.to_datetime(df['week_start_date'])
-elif 'date' in df.columns:
+if 'date' in df.columns:
     df['date'] = pd.to_datetime(df['date'])
+else:
+    print("❌ No 'date' column found in dataset!")
+    exit(1)
 
 # Sort by date
 df = df.sort_values('date').reset_index(drop=True)
 
-# Group by week and get average emissions
-weekly_data = df.groupby('date')['total_emissions_tco2e'].mean().reset_index()
+# Group by week and get average emissions (aggregate daily data to weekly for analysis)
+df['week'] = df['date'].dt.to_period('W')
+weekly_data = df.groupby('week')['total_emissions_tco2e'].mean().reset_index()
+weekly_data['date'] = weekly_data['week'].dt.to_timestamp()
 weekly_data['week_index'] = range(len(weekly_data))
 
-print(f"✓ Aggregated to {len(weekly_data)} weekly data points\n")
+print(
+    f"✓ Aggregated {len(df)} daily records to {len(weekly_data)} weekly data points for analysis\n")
 
 # ====================
 # LINEARITY TESTS

@@ -364,10 +364,11 @@ if __name__ == "__main__":
         df = pd.read_csv(csv_path)
 
         # Convert date column
-        if 'week_start_date' in df.columns:
-            df['date'] = pd.to_datetime(df['week_start_date'])
-        elif 'date' in df.columns:
+        if 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'])
+        else:
+            logger.error("No 'date' column found in dataset!")
+            exit(1)
 
         # Make predictions and plot
         predictions, plot_path = predict_and_plot(
@@ -388,8 +389,8 @@ if __name__ == "__main__":
 
         future_df, future_plot = generate_future_predictions(
             base_data=df,
-            periods=26,  # 26 weeks (6 months)
-            frequency='W',
+            periods=90,  # 90 days (~3 months)
+            frequency='D',
             output_path=os.path.join(os.path.dirname(
                 __file__), 'future_forecast.png')
         )

@@ -1,7 +1,7 @@
 """
-Synthetic Weekly Emission Dataset Generator
+Synthetic Daily Emission Dataset Generator
 
-Generates realistic weekly aggregated emission data for carbon footprint analysis.
+Generates realistic daily emission data for carbon footprint analysis.
 Includes multi-country, multi-industry facility operations with temporal patterns.
 """
 import numpy as np
@@ -23,15 +23,15 @@ random.seed(42)
 # CONFIGURATION
 # ====================
 
-# Time range for weekly data
-WEEK_START_DATE = '2023-11-06'  # Monday
-WEEK_END_DATE = '2025-11-10'
-FACILITIES_PER_WEEK_MIN = 90
-FACILITIES_PER_WEEK_MAX = 101
+# Time range for daily data
+START_DATE = '2023-11-06'
+END_DATE = '2025-11-10'
+FACILITIES_PER_DAY_MIN = 12
+FACILITIES_PER_DAY_MAX = 18
 
-# Generate weekly date range
-weeks = pd.date_range(start=WEEK_START_DATE, end=WEEK_END_DATE, freq='W-MON')
-n_weeks = len(weeks)
+# Generate daily date range
+dates = pd.date_range(start=START_DATE, end=END_DATE, freq='D')
+n_days = len(dates)
 
 # Expand facilities to get ~100 unique combinations
 facilities_expanded = [
@@ -319,12 +319,12 @@ def add_cyclical_patterns(week_idx: int) -> float:
 rows = []
 record_counter = 0
 
-for week_idx, week_date in enumerate(weeks):
-    # Randomly select facilities to have records this week
-    n_facilities_this_week = np.random.randint(
-        FACILITIES_PER_WEEK_MIN, FACILITIES_PER_WEEK_MAX)
+for day_idx, date in enumerate(dates):
+    # Randomly select facilities to have records this day
+    n_facilities_this_day = np.random.randint(
+        FACILITIES_PER_DAY_MIN, FACILITIES_PER_DAY_MAX)
     selected_facilities = np.random.choice(
-        facilities, size=n_facilities_this_week, replace=True)
+        facilities, size=n_facilities_this_day, replace=True)
 
     for facility in selected_facilities:
         org = org_ids[0]
@@ -340,51 +340,49 @@ for week_idx, week_date in enumerate(weeks):
         employee_count = np.random.randint(*params['employee_range'])
         base_elec_daily = np.random.randint(*params['base_elec_daily'])
         base_product_daily = np.random.randint(*params['base_product_daily'])
-        days_options, days_probs = params['operating_days_probs']
-        operating_days = np.random.choice(days_options, p=days_probs)
 
-        # APPLY VARIATION MULTIPLIERS
-        seasonal_mult = get_seasonal_multiplier(week_date, week_idx)
-        trend_mult = get_trend_multiplier(week_idx, n_weeks)
-        weekly_var = get_weekly_variation()
-        cyclical_mult = add_cyclical_patterns(week_idx)
+        # APPLY VARIATION MULTIPLIERS (daily basis)
+        seasonal_mult = get_seasonal_multiplier(date, day_idx)
+        trend_mult = get_trend_multiplier(day_idx, n_days)
+        daily_var = get_weekly_variation()  # Reusing for daily variation
+        cyclical_mult = add_cyclical_patterns(day_idx)
         industry_profile = get_industry_emissions_profile(industry_sector)
         industry_mult = industry_profile['base_multiplier']
         industry_volatility = industry_profile['volatility']
-        event_mult = add_special_events(week_date, week_idx)
+        event_mult = add_special_events(date, day_idx)
 
         # Combined multiplier with all variation sources
-        combined_multiplier = (seasonal_mult * trend_mult * weekly_var *
+        combined_multiplier = (seasonal_mult * trend_mult * daily_var *
                                cyclical_mult * industry_mult * event_mult *
                                np.random.uniform(1 - industry_volatility, 1 + industry_volatility))
 
-        # WEEKLY AGGREGATED VALUES
+        # DAILY VALUES (not aggregated)
 
-        # Energy/electricity (kWh) - weekly total with variation
-        elec_kwh_daily = max(0, np.random.normal(
+        # Energy/electricity (kWh) - daily total with variation
+        elec_kwh = max(0, np.random.normal(
             loc=base_elec_daily, scale=base_elec_daily*0.25)) * combined_multiplier
-        elec_kwh = round(elec_kwh_daily * operating_days, 2)
+        elec_kwh = round(elec_kwh, 2)
         renewable_kwh = round(elec_kwh * np.random.beta(1.5, 6.0), 2)
         grid_ef = round(np.random.normal(0.82, 0.05), 3)
         elec_cost = round(elec_kwh * np.random.normal(9.5, 1.2), 2)
 
-        # Fuel usage - weekly total with variation
+        # Fuel usage - daily total with variation
         fuel_type = np.random.choice(FUEL_TYPES, p=FUEL_TYPE_PROBS)
         if np.random.rand() < 0.55:
-            fuel_daily = abs(np.random.normal(
+            fuel_consumed = abs(np.random.normal(
                 loc=50 if 'Plant' in facility else 20, scale=25)) * combined_multiplier
-            fuel_consumed = round(fuel_daily * operating_days, 2)
+            fuel_consumed = round(fuel_consumed, 2)
         else:
             fuel_consumed = 0.0
         fuel_ef = FUEL_EF_MAP[fuel_type]
         generator_hours = round(np.random.exponential(
-            scale=2.0) * operating_days * combined_multiplier, 2) if fuel_consumed > 0 else 0.0
+            scale=2.0) * combined_multiplier, 2) if fuel_consumed > 0 else 0.0
 
-        # Fleet data - weekly totals with variation
+        # Fleet data - daily totals with variation
         if np.random.rand() < 0.3:
             vehicle = random.choice(VEHICLE_IDS)
             distance_km = round(abs(np.random.normal(
-                loc=120, scale=80)) * operating_days * combined_multiplier, 2)
+                loc=120, scale=80)) * combined_multiplier, 2)
             vehicle_fuel = round(
                 distance_km / np.random.normal(loc=10.0, scale=1.5), 2)
         else:
@@ -392,20 +390,19 @@ for week_idx, week_date in enumerate(weeks):
             distance_km = 0.0
             vehicle_fuel = 0.0
 
-        # Weekly average occupancy rate with variation
+        # Daily occupancy rate with variation
         base_occupancy = 65 if event_mult < 0.8 else 80  # Lower during events/shutdowns
         occupancy_rate = round(np.clip(base_occupancy * combined_multiplier *
                                        np.random.uniform(0.7, 1.1), 10, 100), 1)
 
-        # Production/activity - weekly total with variation
-        product_output_daily = max(1, int(np.random.normal(
+        # Production/activity - daily total with variation
+        product_output = max(1, int(np.random.normal(
             loc=base_product_daily, scale=base_product_daily*0.3) * combined_multiplier))
-        product_output = product_output_daily * operating_days
         product_output = max(0, product_output)
 
-        # Machine runtime - weekly total hours
+        # Machine runtime - daily total hours
         machine_runtime_hours = round(
-            np.random.uniform(0, 24) * operating_days, 2)
+            np.random.uniform(0, 24), 2)
         equipment_power_kw = round(
             np.random.choice([15, 45, 75, 100, 5, 25, 60]), 1)
 
@@ -418,16 +415,16 @@ for week_idx, week_date in enumerate(weeks):
         occupancy_count = int(max(0, round(product_output / np.random.uniform(20, 200), 0) +
                                   np.random.randint(1, 50)))
 
-        # Total working hours for the week
-        daily_hours = np.random.choice([8, 9, 10, 12], p=[0.4, 0.3, 0.2, 0.1])
-        working_hours_per_week = round(daily_hours * operating_days, 2)
+        # Total working hours for the day
+        working_hours_per_day = round(np.random.choice(
+            [8, 9, 10, 12], p=[0.4, 0.3, 0.2, 0.1]), 2)
 
-        # Supply chain / spend - weekly total with variation
+        # Supply chain / spend - daily total with variation
         supplier = random.choice(SUPPLIERS)
         category = random.choice(PURCHASE_CATEGORIES)
-        spend_daily = abs(np.random.normal(
+        spend = abs(np.random.normal(
             loc=50000 if category == 'Raw material' else 15000, scale=30000) * combined_multiplier)
-        spend = round(spend_daily * operating_days, 2)
+        spend = round(spend, 2)
         cat_ef = CATEGORY_EF[category]
 
         # Calculate emissions using helper function
@@ -457,19 +454,18 @@ for week_idx, week_date in enumerate(weeks):
             roi_months = None
             priority = None
 
-        predicted_next_week = round(total_t * np.random.uniform(0.95, 1.15), 4)
+        predicted_next_month = round(
+            total_t * np.random.uniform(0.95, 1.15), 4)
 
         row = {
             'organization_id': org,
-            'org_domain': org_domain,
             'facility_name': facility,
             'location': loc,
+            'date': date.date().isoformat(),
+            'org_domain': org_domain,
             'country': country,
             'industry_sector': industry_sector,
             'employee_count': employee_count,
-            'week_start_date': week_date.date().isoformat(),
-            'week_end_date': (week_date + timedelta(days=6)).date().isoformat(),
-            'operating_days_in_week': operating_days,
             'electricity_consumption_kwh': elec_kwh,
             'renewable_energy_kwh': renewable_kwh,
             'grid_emission_factor_kgco2_per_kwh': grid_ef,
@@ -489,12 +485,12 @@ for week_idx, week_date in enumerate(weeks):
             'humidity_percent': humidity,
             'weather_condition': weather,
             'occupancy_count': occupancy_count,
-            'working_hours_per_week': working_hours_per_week,
+            'working_hours_per_day': working_hours_per_day,
             'supplier_name': supplier,
             'purchase_category': category,
             'spend_amount_inr': spend,
             'category_emission_factor_kgco2_per_inr': cat_ef,
-            'scope_1_emissions_tco2e': scope1_t,  # Already includes vehicle emissions
+            'scope_1_emissions_tco2e': scope1_t,
             'scope_2_emissions_tco2e': scope2_t,
             'scope_3_emissions_tco2e': scope3_t,
             'total_emissions_tco2e': total_t,
@@ -505,8 +501,8 @@ for week_idx, week_date in enumerate(weeks):
             'implementation_cost_inr': implementation_cost,
             'roi_months': roi_months,
             'priority_level': priority,
-            'predicted_emission_next_week_tco2e': predicted_next_week,
-            'record_id': 'synthetic_anonymized_weekly_record'
+            'predicted_emission_next_month_tco2e': predicted_next_month,
+            'record_id': 'synthetic_anonymized_daily_record'
         }
 
         rows.append(row)
@@ -532,12 +528,12 @@ df.to_csv(out_path, index=False)
 # ====================
 
 print("\n" + "="*60)
-print("  SYNTHETIC WEEKLY EMISSION DATASET GENERATION COMPLETE")
+print("  SYNTHETIC DAILY EMISSION DATASET GENERATION COMPLETE")
 print("="*60)
 print(f"✓ Dataset saved to: {out_path}")
 print(f"✓ Total records: {len(df):,}")
-print(f"✓ Time period: {WEEK_START_DATE} to {WEEK_END_DATE}")
-print(f"✓ Weeks covered: {n_weeks}")
+print(f"✓ Time period: {START_DATE} to {END_DATE}")
+print(f"✓ Days covered: {n_days}")
 print(f"✓ Features: {len(df.columns)}")
 print(f"✓ Facilities: {len(facilities)}")
 print(f"✓ Countries: {len(countries)}")
@@ -546,11 +542,11 @@ print("="*60)
 print(f"\nDataset shape: {df.shape}")
 print(f"\nSample statistics:")
 print(
-    f"  Average weekly emissions: {df['total_emissions_tco2e'].mean():.2f} tCO2e")
+    f"  Average daily emissions: {df['total_emissions_tco2e'].mean():.2f} tCO2e")
 print(
-    f"  Median weekly emissions: {df['total_emissions_tco2e'].median():.2f} tCO2e")
-print(f"  Max weekly emissions: {df['total_emissions_tco2e'].max():.2f} tCO2e")
-print(f"  Min weekly emissions: {df['total_emissions_tco2e'].min():.2f} tCO2e")
+    f"  Median daily emissions: {df['total_emissions_tco2e'].median():.2f} tCO2e")
+print(f"  Max daily emissions: {df['total_emissions_tco2e'].max():.2f} tCO2e")
+print(f"  Min daily emissions: {df['total_emissions_tco2e'].min():.2f} tCO2e")
 print(f"\nFirst few rows:")
 print(df.head(3).to_string(max_cols=10))
 print("="*60 + "\n")
