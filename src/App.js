@@ -97,7 +97,6 @@ function App() {
             {user ? (
               <>
                 <a href="#dashboard" className="nav-tab">Dashboard</a>
-                <a href="#data-forecasting" className="nav-tab">Data & Forecasting</a>
                 <a href="#recommendations" className="nav-tab">Recommendations</a>
                 <a href="#organization" className="nav-tab" onClick={(e) => { e.preventDefault(); setShowOrgSetup(true); }}>
                   Organization Setup

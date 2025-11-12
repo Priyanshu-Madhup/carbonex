@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import './OrganizationSetup.css';
 
 function OrganizationSetup({ onComplete, onBack }) {
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0); // Start from step 0 for file upload
   const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [fileError, setFileError] = useState('');
   const [formData, setFormData] = useState({
     // Step 1
     organizationName: '',
@@ -90,14 +92,53 @@ function OrganizationSetup({ onComplete, onBack }) {
     });
   };
 
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Check file type
+    const validTypes = [
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ];
+    const validExtensions = ['.csv', '.xls', '.xlsx'];
+    const fileExtension = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+
+    if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
+      setFileError('Please upload a valid CSV or Excel file (.csv, .xls, .xlsx)');
+      setUploadedFile(null);
+      return;
+    }
+
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setFileError('File size must be less than 10MB');
+      setUploadedFile(null);
+      return;
+    }
+
+    setFileError('');
+    setUploadedFile(file);
+  };
+
+  const handleRemoveFile = () => {
+    setUploadedFile(null);
+    setFileError('');
+  };
+
   const nextStep = () => {
+    if (currentStep === 0 && !uploadedFile) {
+      setFileError('Please upload a dataset file before proceeding');
+      return;
+    }
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     }
   };
 
   const prevStep = () => {
-    if (currentStep > 1) {
+    if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
     }
   };
@@ -138,7 +179,7 @@ function OrganizationSetup({ onComplete, onBack }) {
   const handleEdit = () => {
     setIsEditing(true);
     setViewMode(false);
-    setCurrentStep(1);
+    setCurrentStep(0); // Start from dataset upload step
   };
 
   const totalEnergy = formData.electricity + formData.diesel + formData.lpg + formData.renewables;
@@ -378,6 +419,11 @@ function OrganizationSetup({ onComplete, onBack }) {
         {/* Progress Bar */}
         <div className="progress-bar-container">
           <div className="progress-steps">
+            <div className={`progress-step ${currentStep >= 0 ? 'active' : ''}`}>
+              <div className="step-circle">📁</div>
+              <span className="step-label">Dataset</span>
+            </div>
+            <div className={`progress-line ${currentStep >= 1 ? 'active' : ''}`}></div>
             <div className={`progress-step ${currentStep >= 1 ? 'active' : ''}`}>
               <div className="step-circle">1</div>
               <span className="step-label">Organization</span>
@@ -393,12 +439,91 @@ function OrganizationSetup({ onComplete, onBack }) {
               <span className="step-label">Targets</span>
             </div>
           </div>
-          <div className="progress-text">Step {currentStep} of 3</div>
+          <div className="progress-text">Step {currentStep} of 4</div>
         </div>
 
         {/* Form Card */}
         <div className="form-card">
           <form onSubmit={handleSubmit}>
+            {/* Step 0 - Dataset Upload */}
+            {currentStep === 0 && (
+              <div className="form-step step-0">
+                <h2 className="step-title">
+                  <span className="step-emoji">📊</span>
+                  Upload Your Dataset
+                </h2>
+                <p className="step-description">
+                  Upload your organization's carbon emission data in CSV or Excel format
+                </p>
+
+                <div className="file-upload-section">
+                  <div className="file-upload-area">
+                    <input
+                      type="file"
+                      id="dataset-file"
+                      accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                      onChange={handleFileUpload}
+                      style={{ display: 'none' }}
+                    />
+                    <label htmlFor="dataset-file" className="file-upload-label">
+                      <div className="upload-icon">📁</div>
+                      <h3>Drag and drop your file here</h3>
+                      <p>or click to browse</p>
+                      <span className="file-formats">Supported formats: CSV, XLS, XLSX (Max 10MB)</span>
+                    </label>
+                  </div>
+
+                  {fileError && (
+                    <div className="file-error">
+                      <span className="error-icon">⚠️</span>
+                      {fileError}
+                    </div>
+                  )}
+
+                  {uploadedFile && (
+                    <div className="uploaded-file-info">
+                      <div className="file-details">
+                        <span className="file-icon">📄</span>
+                        <div className="file-info">
+                          <p className="file-name">{uploadedFile.name}</p>
+                          <p className="file-size">
+                            {(uploadedFile.size / 1024).toFixed(2)} KB
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="remove-file-btn"
+                          onClick={handleRemoveFile}
+                        >
+                          ❌
+                        </button>
+                      </div>
+                      <div className="file-success">
+                        <span className="success-icon">✅</span>
+                        File uploaded successfully!
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="file-requirements">
+                    <h4>📋 Dataset Requirements:</h4>
+                    <ul>
+                      <li>Include columns for date, emission source, and quantity</li>
+                      <li>Data should be in chronological order</li>
+                      <li>Use standard units (tonnes CO2e, kWh, liters, etc.)</li>
+                      <li>Ensure data covers at least the past 6 months</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="form-buttons">
+                  <button type="button" className="btn-next" onClick={nextStep}>
+                    Next Step →
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Step 1 - Organization Details */}
             {currentStep === 1 && (
               <div className="form-step step-1">
@@ -454,6 +579,9 @@ function OrganizationSetup({ onComplete, onBack }) {
                 </div>
 
                 <div className="form-actions">
+                  <button type="button" className="btn-prev" onClick={prevStep}>
+                    ← Previous
+                  </button>
                   <button type="button" className="btn-next" onClick={nextStep}>
                     Next →
                   </button>

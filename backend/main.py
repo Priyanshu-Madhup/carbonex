@@ -55,7 +55,6 @@ def init_db():
             organization_name TEXT NOT NULL,
             industry TEXT NOT NULL,
             num_employees INTEGER NOT NULL,
-            num_facilities INTEGER NOT NULL,
             electricity INTEGER NOT NULL,
             diesel INTEGER NOT NULL,
             lpg INTEGER NOT NULL,
@@ -101,7 +100,6 @@ class OrganizationSetup(BaseModel):
     organizationName: str
     industry: str
     numEmployees: int
-    numFacilities: int
     electricity: int
     diesel: int
     lpg: int
@@ -265,7 +263,6 @@ async def setup_organization(org: OrganizationSetup, token: str):
                 organization_name = ?,
                 industry = ?,
                 num_employees = ?,
-                num_facilities = ?,
                 electricity = ?,
                 diesel = ?,
                 lpg = ?,
@@ -283,7 +280,7 @@ async def setup_organization(org: OrganizationSetup, token: str):
                 updated_at = CURRENT_TIMESTAMP
             WHERE user_id = ?
         """, (
-            org.organizationName, org.industry, org.numEmployees, org.numFacilities,
+            org.organizationName, org.industry, org.numEmployees,
             org.electricity, org.diesel, org.lpg, org.renewables,
             org.numVehicles, org.fuelUsage, org.country, org.city,
             org.goalYear, org.reductionGoal,
@@ -294,13 +291,13 @@ async def setup_organization(org: OrganizationSetup, token: str):
         # Insert new organization
         cursor.execute("""
             INSERT INTO organizations (
-                user_id, organization_name, industry, num_employees, num_facilities,
+                user_id, organization_name, industry, num_employees,
                 electricity, diesel, lpg, renewables, num_vehicles, fuel_usage,
                 country, city, goal_year, reduction_goal,
                 solar_panels, ev_fleet, green_procurement, carbon_offsets
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            user_id, org.organizationName, org.industry, org.numEmployees, org.numFacilities,
+            user_id, org.organizationName, org.industry, org.numEmployees,
             org.electricity, org.diesel, org.lpg, org.renewables,
             org.numVehicles, org.fuelUsage, org.country, org.city,
             org.goalYear, org.reductionGoal,
@@ -323,7 +320,7 @@ async def get_organization(token: str):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT 
-            organization_name, industry, num_employees, num_facilities,
+            organization_name, industry, num_employees,
             electricity, diesel, lpg, renewables, num_vehicles, fuel_usage,
             country, city, goal_year, reduction_goal,
             solar_panels, ev_fleet, green_procurement, carbon_offsets,
@@ -340,23 +337,22 @@ async def get_organization(token: str):
         "organizationName": result[0],
         "industry": result[1],
         "numEmployees": result[2],
-        "numFacilities": result[3],
-        "electricity": result[4],
-        "diesel": result[5],
-        "lpg": result[6],
-        "renewables": result[7],
-        "numVehicles": result[8],
-        "fuelUsage": result[9],
-        "country": result[10],
-        "city": result[11],
-        "goalYear": result[12],
-        "reductionGoal": result[13],
-        "solarPanels": bool(result[14]),
-        "evFleet": bool(result[15]),
-        "greenProcurement": bool(result[16]),
-        "carbonOffsets": bool(result[17]),
-        "createdAt": result[18],
-        "updatedAt": result[19]
+        "electricity": result[3],
+        "diesel": result[4],
+        "lpg": result[5],
+        "renewables": result[6],
+        "numVehicles": result[7],
+        "fuelUsage": result[8],
+        "country": result[9],
+        "city": result[10],
+        "goalYear": result[11],
+        "reductionGoal": result[12],
+        "solarPanels": bool(result[13]),
+        "evFleet": bool(result[14]),
+        "greenProcurement": bool(result[15]),
+        "carbonOffsets": bool(result[16]),
+        "createdAt": result[17],
+        "updatedAt": result[18]
     }
 
 @app.get("/")
