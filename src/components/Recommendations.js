@@ -7,16 +7,16 @@ function Recommendations({ user, onNavigateToDashboard, onNavigateToRecommendati
     {
       role: 'assistant',
       content: `<div>
-        <h2>👋 Welcome to EcoAI!</h2>
+        <h2>Welcome to EcoAI!</h2>
         <p>I'm your sustainability assistant with access to your organization's carbon footprint data.</p>
-        <h3>💡 How I Can Help:</h3>
+        <h3>How I Can Help:</h3>
         <ul>
           <li><strong>Carbon reduction strategies</strong> - Personalized recommendations based on your data</li>
           <li><strong>Energy efficiency insights</strong> - Optimize your energy consumption</li>
           <li><strong>Sustainability best practices</strong> - Industry-specific guidance</li>
           <li><strong>Custom analysis</strong> - Data-driven insights for your goals</li>
         </ul>
-        <p>Ask me anything about reducing your carbon footprint! 🌿</p>
+        <p>Ask me anything about reducing your carbon footprint!</p>
       </div>`,
       timestamp: new Date()
     }
@@ -156,10 +156,6 @@ function Recommendations({ user, onNavigateToDashboard, onNavigateToRecommendati
     <div className="recommendations-page">
       {/* Background decorations */}
       <div className="bg-decorations">
-        <span className="bg-icon leaf1">🌿</span>
-        <span className="bg-icon leaf2">🍃</span>
-        <span className="bg-icon globe">🌍</span>
-        <span className="bg-icon energy">⚡</span>
       </div>
 
       {/* Navbar */}
@@ -184,8 +180,15 @@ function Recommendations({ user, onNavigateToDashboard, onNavigateToRecommendati
             <a href="#organization" className="nav-tab" onClick={(e) => { e.preventDefault(); onNavigateToOrgSetup(); }}>
               Organization Setup
             </a>
-            <a href="#settings" className="nav-tab" onClick={(e) => { e.preventDefault(); }}>Settings</a>
-            <a href="#help" className="nav-tab" onClick={(e) => { e.preventDefault(); }}>Help / Docs</a>
+            <a 
+              href="https://github.com/Priyanshu-Madhup/carbonex" 
+              className="nav-tab" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              title="View documentation and source code"
+            >
+              Help / Docs
+            </a>
             <div className="profile-dropdown">
               <span 
                 className="user-icon" 
@@ -230,7 +233,7 @@ function Recommendations({ user, onNavigateToDashboard, onNavigateToRecommendati
         <div className="chat-layout">
           {/* Quick Queries Sidebar */}
           <div className="quick-queries-panel">
-            <h3 className="panel-title">💡 Quick Questions</h3>
+            <h3 className="panel-title">Quick Questions</h3>
             <div className="quick-queries-list">
               {quickQueries.map((query, index) => (
                 <button
@@ -247,7 +250,7 @@ function Recommendations({ user, onNavigateToDashboard, onNavigateToRecommendati
 
             {orgData && (
               <div className="org-context-info">
-                <h4 className="context-title">📊 Your Data Context</h4>
+                <h4 className="context-title">Your Data Context</h4>
                 <div className="context-item">
                   <span className="context-label">Organization:</span>
                   <span className="context-value">{orgData.organizationName}</span>

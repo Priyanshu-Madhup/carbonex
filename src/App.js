@@ -64,6 +64,9 @@ function App() {
     localStorage.removeItem('user');
     setUser(null);
     setShowProfileDropdown(false);
+    setShowDashboard(false);
+    setShowRecommendations(false);
+    setShowOrgSetup(false);
   };
 
   return (
@@ -146,8 +149,15 @@ function App() {
                 <a href="#organization" className="nav-tab" onClick={(e) => { e.preventDefault(); setShowOrgSetup(true); setShowDashboard(false); setShowRecommendations(false); }}>
                   Organization Setup
                 </a>
-                <a href="#settings" className="nav-tab">Settings</a>
-                <a href="#help" className="nav-tab">Help / Docs</a>
+                <a 
+                  href="https://github.com/Priyanshu-Madhup/carbonex" 
+                  className="nav-tab" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  title="View documentation and source code"
+                >
+                  Help / Docs
+                </a>
                 <div className="profile-dropdown">
                   <span 
                     className="user-icon" 

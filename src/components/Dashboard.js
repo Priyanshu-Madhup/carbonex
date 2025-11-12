@@ -132,8 +132,15 @@ function Dashboard({ user, sessionToken, onNavigateToDashboard, onNavigateToReco
             <a href="#organization" className="nav-tab" onClick={(e) => { e.preventDefault(); onNavigateToOrgSetup(); }}>
               Organization Setup
             </a>
-            <a href="#settings" className="nav-tab" onClick={(e) => { e.preventDefault(); }}>Settings</a>
-            <a href="#help" className="nav-tab" onClick={(e) => { e.preventDefault(); }}>Help / Docs</a>
+            <a 
+              href="https://github.com/Priyanshu-Madhup/carbonex" 
+              className="nav-tab" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              title="View documentation and source code"
+            >
+              Help / Docs
+            </a>
             <div className="profile-dropdown">
               <span 
                 className="user-icon" 
