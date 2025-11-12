@@ -4,13 +4,16 @@ import Login from './components/Login';
 import Signup from './components/Signup';
 import OrganizationSetup from './components/OrganizationSetup';
 import Recommendations from './components/Recommendations';
+import Dashboard from './components/Dashboard';
 
 function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
   const [showOrgSetup, setShowOrgSetup] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
   const [user, setUser] = useState(null);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -20,6 +23,20 @@ function App() {
       setUser(JSON.parse(savedUser));
     }
   }, []);
+
+  useEffect(() => {
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event) => {
+      if (showProfileDropdown && !event.target.closest('.profile-dropdown')) {
+        setShowProfileDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileDropdown]);
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
@@ -45,20 +62,45 @@ function App() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
+    setShowProfileDropdown(false);
   };
 
   return (
     <div className="App">
-      {/* Show Recommendations if activated */}
-      {showRecommendations ? (
+      {/* Show Dashboard if activated */}
+      {showDashboard ? (
+        <Dashboard
+          user={user}
+          sessionToken={localStorage.getItem('token')}
+          onNavigateToDashboard={() => { setShowDashboard(true); setShowRecommendations(false); setShowOrgSetup(false); }}
+          onNavigateToRecommendations={() => { setShowRecommendations(true); setShowDashboard(false); setShowOrgSetup(false); }}
+          onNavigateToOrgSetup={() => { setShowOrgSetup(true); setShowDashboard(false); setShowRecommendations(false); }}
+          onNavigateToHome={() => { setShowDashboard(false); setShowRecommendations(false); setShowOrgSetup(false); }}
+          onBack={() => setShowDashboard(false)}
+          onLogout={handleLogout}
+        />
+      ) : /* Show Recommendations if activated */
+      showRecommendations ? (
         <Recommendations
+          user={user}
+          onNavigateToDashboard={() => { setShowDashboard(true); setShowRecommendations(false); setShowOrgSetup(false); }}
+          onNavigateToRecommendations={() => { setShowRecommendations(true); setShowDashboard(false); setShowOrgSetup(false); }}
+          onNavigateToOrgSetup={() => { setShowOrgSetup(true); setShowDashboard(false); setShowRecommendations(false); }}
+          onNavigateToHome={() => { setShowDashboard(false); setShowRecommendations(false); setShowOrgSetup(false); }}
           onBack={() => setShowRecommendations(false)}
+          onLogout={handleLogout}
         />
       ) : /* Show Organization Setup if activated */
       showOrgSetup ? (
         <OrganizationSetup
+          user={user}
+          onNavigateToDashboard={() => { setShowDashboard(true); setShowRecommendations(false); setShowOrgSetup(false); }}
+          onNavigateToRecommendations={() => { setShowRecommendations(true); setShowDashboard(false); setShowOrgSetup(false); }}
+          onNavigateToOrgSetup={() => { setShowOrgSetup(true); setShowDashboard(false); setShowRecommendations(false); }}
+          onNavigateToHome={() => { setShowDashboard(false); setShowRecommendations(false); setShowOrgSetup(false); }}
           onComplete={() => setShowOrgSetup(false)}
           onBack={() => setShowOrgSetup(false)}
+          onLogout={handleLogout}
         />
       ) : (
         <>
@@ -84,16 +126,7 @@ function App() {
             />
           )}
 
-          {/* Floating Background Elements */}
-      <div className="floating-icons">
-        <span className="float-icon leaf">🌿</span>
-        <span className="float-icon earth">🌍</span>
-        <span className="float-icon energy">⚡</span>
-        <span className="float-icon cloud">☁️</span>
-        <span className="float-icon leaf2">🍃</span>
-      </div>
-
-      {/* Header / Navbar */}
+          {/* Header / Navbar */}
       <nav className="navbar">
         <div className="nav-container">
           <div className="logo">
@@ -103,18 +136,38 @@ function App() {
           <div className="nav-links">
             {user ? (
               <>
-                <a href="#dashboard" className="nav-tab">Dashboard</a>
-                <a href="#recommendations" className="nav-tab" onClick={(e) => { e.preventDefault(); setShowRecommendations(true); }}>
+                <a href="#dashboard" className="nav-tab" onClick={(e) => { e.preventDefault(); setShowDashboard(true); setShowRecommendations(false); setShowOrgSetup(false); }}>
+                  Dashboard
+                </a>
+                <a href="#recommendations" className="nav-tab" onClick={(e) => { e.preventDefault(); setShowRecommendations(true); setShowDashboard(false); setShowOrgSetup(false); }}>
                   Recommendations
                 </a>
-                <a href="#organization" className="nav-tab" onClick={(e) => { e.preventDefault(); setShowOrgSetup(true); }}>
+                <a href="#organization" className="nav-tab" onClick={(e) => { e.preventDefault(); setShowOrgSetup(true); setShowDashboard(false); setShowRecommendations(false); }}>
                   Organization Setup
                 </a>
                 <a href="#settings" className="nav-tab">Settings</a>
                 <a href="#help" className="nav-tab">Help / Docs</a>
                 <div className="profile-dropdown">
-                  <span className="user-icon" title={user.name}>👤</span>
-                  <button className="logout-btn" onClick={handleLogout}>Logout</button>
+                  <span 
+                    className="user-icon" 
+                    title={user.name}
+                    onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                  >
+                    👤
+                  </span>
+                  {showProfileDropdown && (
+                    <div className="dropdown-menu">
+                      <div className="dropdown-header">
+                        <div className="dropdown-user-name">{user.name}</div>
+                        <div className="dropdown-user-email">{user.email}</div>
+                      </div>
+                      <div className="dropdown-divider"></div>
+                      <button className="dropdown-item" onClick={handleLogout}>
+                        <span className="dropdown-icon">🚪</span>
+                        Logout
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
@@ -132,32 +185,90 @@ function App() {
 
       {/* Hero Section */}
       <section className="hero">
+        <div className="hero-background">
+          <div className="gradient-orb orb-1"></div>
+          <div className="gradient-orb orb-2"></div>
+          <div className="gradient-orb orb-3"></div>
+        </div>
         <div className="hero-container">
           <div className="hero-left">
-            <h1 className="hero-title">Monitor. Predict. Reduce.</h1>
+            <div className="hero-badge">
+              <span className="badge-icon">🌿</span>
+              <span className="badge-text">AI-Powered Carbon Management</span>
+            </div>
+            <h1 className="hero-title">
+              Monitor. Predict. <span className="highlight-text">Reduce.</span>
+            </h1>
             <p className="hero-subtitle">
-              Empowering organizations to achieve net-zero through AI.
+              Empowering organizations to achieve net-zero through intelligent AI-driven 
+              analytics and actionable sustainability insights.
             </p>
+            <div className="hero-stats">
+              <div className="stat-item">
+                <div className="stat-number">500+</div>
+                <div className="stat-label">Organizations</div>
+              </div>
+              <div className="stat-divider"></div>
+              <div className="stat-item">
+                <div className="stat-number">2M+</div>
+                <div className="stat-label">Tons CO₂ Reduced</div>
+              </div>
+              <div className="stat-divider"></div>
+              <div className="stat-item">
+                <div className="stat-number">98%</div>
+                <div className="stat-label">Accuracy</div>
+              </div>
+            </div>
             <div className="hero-buttons">
-              <button className="btn-primary">Try Demo</button>
-              <button className="btn-outline">Learn More</button>
+              <button className="btn-primary">
+                <span>Get Started</span>
+                <span className="btn-arrow">→</span>
+              </button>
+              <button className="btn-outline">
+                <span className="btn-icon">▶</span>
+                Watch Demo
+              </button>
             </div>
           </div>
           <div className="hero-right">
             <div className="dashboard-illustration">
               <div className="dash-card">
-                <div className="dash-header">Carbon Analytics</div>
-                <div className="dash-chart">
-                  <div className="chart-bar" style={{height: '60%'}}></div>
-                  <div className="chart-bar" style={{height: '40%'}}></div>
-                  <div className="chart-bar" style={{height: '80%'}}></div>
-                  <div className="chart-bar" style={{height: '50%'}}></div>
-                  <div className="chart-bar" style={{height: '30%'}}></div>
+                <div className="dash-header">
+                  <span>Carbon Analytics</span>
+                  <span className="status-badge">Live</span>
                 </div>
-                <div className="dash-icons">
-                  <span className="dash-icon">🌳</span>
-                  <span className="dash-icon">💨</span>
-                  <span className="dash-icon">☀️</span>
+                <div className="dash-chart">
+                  <div className="chart-bar" style={{height: '60%'}}>
+                    <div className="chart-tooltip">-12%</div>
+                  </div>
+                  <div className="chart-bar" style={{height: '40%'}}>
+                    <div className="chart-tooltip">-20%</div>
+                  </div>
+                  <div className="chart-bar" style={{height: '80%'}}>
+                    <div className="chart-tooltip">-8%</div>
+                  </div>
+                  <div className="chart-bar" style={{height: '50%'}}>
+                    <div className="chart-tooltip">-15%</div>
+                  </div>
+                  <div className="chart-bar active" style={{height: '30%'}}>
+                    <div className="chart-tooltip">-25%</div>
+                  </div>
+                </div>
+                <div className="dash-metrics">
+                  <div className="metric-item">
+                    <span className="metric-icon">🌳</span>
+                    <div className="metric-info">
+                      <div className="metric-label">Carbon Offset</div>
+                      <div className="metric-value">1,240 tons</div>
+                    </div>
+                  </div>
+                  <div className="metric-item">
+                    <span className="metric-icon">⚡</span>
+                    <div className="metric-info">
+                      <div className="metric-label">Energy Saved</div>
+                      <div className="metric-value">34% ↓</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

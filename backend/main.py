@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List, Dict, Any
@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from groq import Groq
 import os
 from dotenv import load_dotenv
+import shutil
+from pathlib import Path
 
 # Load environment variables
 load_dotenv()
@@ -530,6 +532,293 @@ Always return valid HTML. Be detailed and provide specific recommendations."""
             "response": fallback_html,
             "timestamp": datetime.now().isoformat()
         }
+
+# ==================== ML FORECASTING ENDPOINTS ====================
+
+@app.post("/api/ml/upload-dataset")
+async def upload_dataset(
+    file: UploadFile = File(...),
+    session_token: str = None
+):
+    """
+    Upload CSV dataset for training
+    Saves to backend/ecosphere_synthetic.csv
+    """
+    try:
+        # Verify session
+        if not session_token:
+            raise HTTPException(status_code=401, detail="Session token required")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?",
+            (session_token, datetime.now())
+        )
+        session = cursor.fetchone()
+        conn.close()
+        
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
+        # Save uploaded file
+        backend_dir = Path(__file__).parent
+        csv_path = backend_dir / "ecosphere_synthetic.csv"
+        
+        with open(csv_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        return {
+            "message": "Dataset uploaded successfully",
+            "filepath": str(csv_path),
+            "filename": file.filename,
+            "size_bytes": csv_path.stat().st_size
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error uploading dataset: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@app.post("/api/ml/train-model")
+async def train_model(session_token: str = None):
+    """
+    Train XGBoost model on uploaded dataset
+    Returns training metrics
+    """
+    try:
+        # Verify session
+        if not session_token:
+            raise HTTPException(status_code=401, detail="Session token required")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?",
+            (session_token, datetime.now())
+        )
+        session = cursor.fetchone()
+        conn.close()
+        
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
+        # Import forecaster
+        from train_xgboost_model import EmissionForecaster
+        
+        backend_dir = Path(__file__).parent
+        csv_path = backend_dir / "ecosphere_synthetic.csv"
+        model_path = backend_dir / "xgboost_emission_model.pkl"
+        
+        if not csv_path.exists():
+            raise HTTPException(status_code=404, detail="Dataset not found. Please upload CSV first.")
+        
+        # Train model
+        forecaster = EmissionForecaster()
+        metrics = forecaster.train(str(csv_path))
+        
+        # Save model
+        forecaster.save(str(model_path))
+        
+        return {
+            "message": "Model trained successfully",
+            "metrics": metrics,
+            "model_path": str(model_path),
+            "training_date": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error training model: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
+
+
+@app.get("/api/ml/forecast/{organization_id}")
+async def get_forecast(organization_id: str, session_token: str = None):
+    """
+    Get 52-week emission forecast for organization
+    Returns predicted emissions for next year
+    """
+    try:
+        # Verify session
+        if not session_token:
+            raise HTTPException(status_code=401, detail="Session token required")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?",
+            (session_token, datetime.now())
+        )
+        session = cursor.fetchone()
+        conn.close()
+        
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
+        # Load model
+        from train_xgboost_model import EmissionForecaster
+        
+        backend_dir = Path(__file__).parent
+        csv_path = backend_dir / "ecosphere_synthetic.csv"
+        model_path = backend_dir / "xgboost_emission_model.pkl"
+        
+        if not model_path.exists():
+            raise HTTPException(status_code=404, detail="Model not found. Please train model first.")
+        
+        if not csv_path.exists():
+            raise HTTPException(status_code=404, detail="Dataset not found.")
+        
+        # Load forecaster
+        forecaster = EmissionForecaster.load(str(model_path))
+        
+        # Get predictions
+        predictions = forecaster.predict_52_weeks(str(csv_path), organization_id)
+        
+        # Get historical data for comparison
+        historical = forecaster.get_current_emissions(str(csv_path), organization_id, weeks=52)
+        
+        return {
+            "organization_id": organization_id,
+            "forecast_weeks": 52,
+            "predictions": predictions,
+            "historical": historical,
+            "generated_at": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating forecast: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Forecast failed: {str(e)}")
+
+
+@app.get("/api/ml/model-info")
+async def get_model_info(session_token: str = None):
+    """
+    Get information about the trained model
+    """
+    try:
+        # Verify session
+        if not session_token:
+            raise HTTPException(status_code=401, detail="Session token required")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?",
+            (session_token, datetime.now())
+        )
+        session = cursor.fetchone()
+        conn.close()
+        
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
+        backend_dir = Path(__file__).parent
+        model_path = backend_dir / "xgboost_emission_model.pkl"
+        csv_path = backend_dir / "ecosphere_synthetic.csv"
+        
+        if not model_path.exists():
+            return {
+                "model_exists": False,
+                "dataset_exists": csv_path.exists(),
+                "message": "No trained model found"
+            }
+        
+        # Load model info
+        import joblib
+        artifact = joblib.load(str(model_path))
+        
+        return {
+            "model_exists": True,
+            "dataset_exists": csv_path.exists(),
+            "training_date": artifact.get('training_date'),
+            "num_features": len(artifact.get('feature_columns', [])),
+            "model_type": "XGBoost Regressor",
+            "model_path": str(model_path)
+        }
+        
+    except Exception as e:
+        print(f"Error getting model info: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get model info: {str(e)}")
+
+@app.get("/api/ml/historical-data/{organization_id}")
+async def get_historical_data(organization_id: str, session_token: str = None):
+    """
+    Get historical emission data from the uploaded dataset
+    """
+    try:
+        # Verify session
+        if not session_token:
+            raise HTTPException(status_code=401, detail="Session token required")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?",
+            (session_token, datetime.now())
+        )
+        session = cursor.fetchone()
+        conn.close()
+        
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
+        backend_dir = Path(__file__).parent
+        csv_path = backend_dir / "ecosphere_synthetic.csv"
+        
+        if not csv_path.exists():
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        
+        # Read the CSV file
+        import pandas as pd
+        df = pd.read_csv(str(csv_path))
+        
+        # Filter for the specific organization
+        org_data = df[df['organization_id'] == organization_id].copy()
+        
+        if org_data.empty:
+            raise HTTPException(status_code=404, detail=f"No data found for organization {organization_id}")
+        
+        # Sort by date
+        org_data['week_start_date'] = pd.to_datetime(org_data['week_start_date'])
+        org_data = org_data.sort_values('week_start_date')
+        
+        # Get the last 52 weeks of historical data (or all if less than 52)
+        last_52_weeks = org_data.tail(52)
+        
+        # Prepare response
+        historical_records = []
+        for idx, row in last_52_weeks.iterrows():
+            historical_records.append({
+                "week": len(historical_records) + 1,
+                "date": row['week_start_date'].strftime('%Y-%m-%d'),
+                "total_emissions": float(row['total_emissions_tco2e'])
+            })
+        
+        return {
+            "organization_id": organization_id,
+            "total_records": len(historical_records),
+            "historical_data": historical_records
+        }
+        
+    except Exception as e:
+        print(f"Error getting historical data: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to get historical data: {str(e)}")
+
+# ==================== END ML ENDPOINTS ====================
 
 @app.get("/")
 async def root():

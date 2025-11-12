@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Recommendations.css';
 
-function Recommendations({ onBack }) {
+function Recommendations({ onNavigateToDashboard, onNavigateToRecommendations, onNavigateToOrgSetup, onNavigateToHome, onBack, user, onLogout }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -23,6 +23,7 @@ function Recommendations({ onBack }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [orgData, setOrgData] = useState(null);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -53,6 +54,20 @@ function Recommendations({ onBack }) {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showProfileDropdown && !event.target.closest('.profile-dropdown')) {
+        setShowProfileDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileDropdown]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -146,18 +161,55 @@ function Recommendations({ onBack }) {
         <span className="bg-icon energy">⚡</span>
       </div>
 
-      {/* Top Navigation */}
-      <div className="recommendations-nav">
-        <div className="nav-content">
-          <div className="logo">
+      {/* Navbar */}
+      <nav className="navbar">
+        <div className="nav-container">
+          <div 
+            className="logo"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateToHome();
+            }}
+            style={{ cursor: 'pointer' }}
+          >
             <span className="logo-icon">🌿</span>
             <span className="logo-text">CarbonEx</span>
           </div>
-          <button className="back-link" onClick={onBack}>
-            ← Back to Dashboard
-          </button>
+          <div className="nav-links">
+            <a href="#dashboard" className="nav-tab" onClick={(e) => { e.preventDefault(); onNavigateToDashboard(); }}>
+              Dashboard
+            </a>
+            <a href="#recommendations" className="nav-tab active">Recommendations</a>
+            <a href="#organization" className="nav-tab" onClick={(e) => { e.preventDefault(); onNavigateToOrgSetup(); }}>
+              Organization Setup
+            </a>
+            <a href="#settings" className="nav-tab" onClick={(e) => { e.preventDefault(); }}>Settings</a>
+            <a href="#help" className="nav-tab" onClick={(e) => { e.preventDefault(); }}>Help / Docs</a>
+            <div className="profile-dropdown">
+              <span 
+                className="user-icon" 
+                title={user?.name || 'User'}
+                onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+              >
+                👤
+              </span>
+              {showProfileDropdown && (
+                <div className="dropdown-menu">
+                  <div className="dropdown-header">
+                    <div className="dropdown-user-name">{user?.name || 'User'}</div>
+                    <div className="dropdown-user-email">{user?.email || 'user@example.com'}</div>
+                  </div>
+                  <div className="dropdown-divider"></div>
+                  <button className="dropdown-item" onClick={onLogout}>
+                    <span className="dropdown-icon">🚪</span>
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </nav>
 
       {/* Main Content */}
       <div className="recommendations-container">

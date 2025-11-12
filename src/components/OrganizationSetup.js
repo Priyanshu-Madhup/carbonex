@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './OrganizationSetup.css';
 
-function OrganizationSetup({ onComplete, onBack }) {
+function OrganizationSetup({ onNavigateToDashboard, onNavigateToRecommendations, onNavigateToOrgSetup, onNavigateToHome, onComplete, onBack, user, onLogout }) {
   const [currentStep, setCurrentStep] = useState(0); // Start from step 0 for file upload
   const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -9,6 +9,10 @@ function OrganizationSetup({ onComplete, onBack }) {
   const [isEditing, setIsEditing] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [fileError, setFileError] = useState('');
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState({ step: '', percentage: 0 });
+  const [successData, setSuccessData] = useState(null);
   const [formData, setFormData] = useState({
     // Step 1
     organizationName: '',
@@ -76,6 +80,20 @@ function OrganizationSetup({ onComplete, onBack }) {
 
     loadOrganizationData();
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showProfileDropdown && !event.target.closest('.profile-dropdown')) {
+        setShowProfileDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileDropdown]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -147,12 +165,17 @@ function OrganizationSetup({ onComplete, onBack }) {
     e.preventDefault();
     
     try {
+      setIsSubmitting(true);
+      setSubmitProgress({ step: 'Saving organization data...', percentage: 25 });
+      
       const token = localStorage.getItem('token');
       if (!token) {
         alert('Please login first');
+        setIsSubmitting(false);
         return;
       }
 
+      // Step 1: Save organization data
       const response = await fetch(`http://localhost:8000/api/organization/setup?token=${token}`, {
         method: 'POST',
         headers: {
@@ -166,12 +189,76 @@ function OrganizationSetup({ onComplete, onBack }) {
         throw new Error(errorData.detail || 'Failed to save organization data');
       }
 
-      // Switch to view mode
-      setViewMode(true);
-      setIsEditing(false);
-      setShowSuccess(false);
+      setSubmitProgress({ step: 'Uploading dataset...', percentage: 50 });
+
+      // Step 2: Upload dataset file if present
+      if (uploadedFile) {
+        const formDataFile = new FormData();
+        formDataFile.append('file', uploadedFile);
+
+        const uploadResponse = await fetch(
+          `http://localhost:8000/api/ml/upload-dataset?session_token=${token}`,
+          {
+            method: 'POST',
+            body: formDataFile
+          }
+        );
+
+        if (uploadResponse.ok) {
+          console.log('Dataset uploaded successfully');
+          
+          setSubmitProgress({ step: 'Training ML model...', percentage: 75 });
+          
+          // Step 3: Auto-train model after upload
+          const trainResponse = await fetch(
+            `http://localhost:8000/api/ml/train-model?session_token=${token}`,
+            {
+              method: 'POST'
+            }
+          );
+
+          if (trainResponse.ok) {
+            const result = await trainResponse.json();
+            console.log('Model trained successfully:', result.metrics);
+            
+            setSubmitProgress({ step: 'Complete!', percentage: 100 });
+            
+            // Store success data for the success card
+            setSuccessData({
+              organization: {
+                name: formData.organizationName,
+                industry: formData.industry,
+                employees: formData.numEmployees,
+                location: `${formData.city}, ${formData.country}`
+              },
+              metrics: result.metrics
+            });
+            
+            setTimeout(() => {
+              setIsSubmitting(false);
+              setShowSuccess(true);
+              setViewMode(true);
+              setIsEditing(false);
+            }, 500);
+          } else {
+            console.error('Model training failed');
+            setIsSubmitting(false);
+            alert('Organization saved, but model training failed. You can retry from Dashboard.');
+          }
+        } else {
+          console.error('Dataset upload failed');
+          setIsSubmitting(false);
+          alert('Organization saved, but dataset upload failed. Please try again from Dashboard.');
+        }
+      } else {
+        // No file uploaded, just save organization
+        setIsSubmitting(false);
+        setViewMode(true);
+        setIsEditing(false);
+      }
     } catch (error) {
       console.error('Error saving organization data:', error);
+      setIsSubmitting(false);
       alert('Failed to save organization data: ' + error.message);
     }
   };
@@ -186,10 +273,10 @@ function OrganizationSetup({ onComplete, onBack }) {
 
   const getSustainabilityPractices = () => {
     const practices = [];
-    if (formData.solarPanels) practices.push('☀️ Solar Panels');
-    if (formData.evFleet) practices.push('🚗 EV Fleet');
-    if (formData.greenProcurement) practices.push('♻️ Green Procurement');
-    if (formData.carbonOffsets) practices.push('🌳 Carbon Offsets');
+    if (formData.solarPanels) practices.push('Solar Panels');
+    if (formData.evFleet) practices.push('EV Fleet');
+    if (formData.greenProcurement) practices.push('Green Procurement');
+    if (formData.carbonOffsets) practices.push('Carbon Offsets');
     return practices.length > 0 ? practices.join(', ') : 'None selected';
   };
 
@@ -211,31 +298,60 @@ function OrganizationSetup({ onComplete, onBack }) {
   if (viewMode) {
     return (
       <div className="org-setup-page">
-        {/* Background decorations */}
-        <div className="bg-decorations">
-          <span className="bg-icon leaf1">🌿</span>
-          <span className="bg-icon leaf2">🍃</span>
-          <span className="bg-icon globe">🌍</span>
-          <span className="bg-icon energy">⚡</span>
-        </div>
-
-        {/* Top Navigation */}
-        <div className="setup-nav">
-          <div className="nav-content">
-            <div className="logo">
+        {/* Navbar */}
+        <nav className="navbar">
+          <div className="nav-container">
+            <div 
+              className="logo"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateToHome();
+              }}
+              style={{ cursor: 'pointer' }}
+            >
               <span className="logo-icon">🌿</span>
               <span className="logo-text">CarbonEx</span>
             </div>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button className="edit-btn" onClick={handleEdit}>
-                ✏️ Edit Details
-              </button>
-              <button className="back-link" onClick={onBack}>
-                ← Back to Dashboard
-              </button>
+            <div className="nav-links">
+              <a href="#dashboard" className="nav-tab" onClick={(e) => { e.preventDefault(); onNavigateToDashboard(); }}>
+                Dashboard
+              </a>
+              <a href="#recommendations" className="nav-tab" onClick={(e) => { e.preventDefault(); onNavigateToRecommendations(); }}>
+                Recommendations
+              </a>
+              <a href="#organization" className="nav-tab active">Organization Setup</a>
+              <a href="#settings" className="nav-tab" onClick={(e) => { e.preventDefault(); }}>Settings</a>
+              <a href="#help" className="nav-tab" onClick={(e) => { e.preventDefault(); }}>Help / Docs</a>
+              <div className="nav-actions">
+                <button className="edit-btn-nav" onClick={handleEdit}>
+                  Edit
+                </button>
+              </div>
+              <div className="profile-dropdown">
+                <span 
+                  className="user-icon" 
+                  title={user?.name || 'User'}
+                  onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+                >
+                  👤
+                </span>
+                {showProfileDropdown && (
+                  <div className="dropdown-menu">
+                    <div className="dropdown-header">
+                      <div className="dropdown-user-name">{user?.name || 'User'}</div>
+                      <div className="dropdown-user-email">{user?.email || 'user@example.com'}</div>
+                    </div>
+                    <div className="dropdown-divider"></div>
+                    <button className="dropdown-item" onClick={onLogout}>
+                      <span className="dropdown-icon">🚪</span>
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </nav>
 
         {/* Organization Details View */}
         <div className="setup-container">
@@ -244,13 +360,21 @@ function OrganizationSetup({ onComplete, onBack }) {
             <p className="setup-subtitle">
               Your complete organization details and sustainability information
             </p>
+            <button 
+              className="btn-quick-dashboard"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateToDashboard();
+              }}
+            >
+              Go to Dashboard
+            </button>
           </div>
 
           <div className="details-view-container">
             {/* Organization Details Section */}
             <div className="details-section">
               <h2 className="details-section-title">
-                <span className="details-emoji">🏢</span>
                 Organization Details
               </h2>
               <div className="details-grid">
@@ -272,7 +396,6 @@ function OrganizationSetup({ onComplete, onBack }) {
             {/* Operations & Energy Section */}
             <div className="details-section">
               <h2 className="details-section-title">
-                <span className="details-emoji">⚡</span>
                 Operations & Energy
               </h2>
               <div className="details-grid">
@@ -280,19 +403,19 @@ function OrganizationSetup({ onComplete, onBack }) {
                   <span className="detail-label">Energy Distribution</span>
                   <div className="energy-breakdown">
                     <div className="energy-item">
-                      <span>🔌 Electricity:</span>
+                      <span>Electricity:</span>
                       <span className="energy-percent">{formData.electricity}%</span>
                     </div>
                     <div className="energy-item">
-                      <span>🛢️ Diesel:</span>
+                      <span>Diesel:</span>
                       <span className="energy-percent">{formData.diesel}%</span>
                     </div>
                     <div className="energy-item">
-                      <span>🔥 LPG:</span>
+                      <span>LPG:</span>
                       <span className="energy-percent">{formData.lpg}%</span>
                     </div>
                     <div className="energy-item">
-                      <span>🌞 Renewables:</span>
+                      <span>Renewables:</span>
                       <span className="energy-percent">{formData.renewables}%</span>
                     </div>
                   </div>
@@ -319,7 +442,6 @@ function OrganizationSetup({ onComplete, onBack }) {
             {/* Targets & Sustainability Section */}
             <div className="details-section">
               <h2 className="details-section-title">
-                <span className="details-emoji">🎯</span>
                 Targets & Sustainability
               </h2>
               <div className="details-grid">
@@ -386,26 +508,55 @@ function OrganizationSetup({ onComplete, onBack }) {
 
   return (
     <div className="org-setup-page">
-      {/* Background decorations */}
-      <div className="bg-decorations">
-        <span className="bg-icon leaf1">🌿</span>
-        <span className="bg-icon leaf2">🍃</span>
-        <span className="bg-icon globe">🌍</span>
-        <span className="bg-icon energy">⚡</span>
-      </div>
-
-      {/* Top Navigation */}
-      <div className="setup-nav">
-        <div className="nav-content">
-          <div className="logo">
+      {/* Navbar */}
+      <nav className="navbar">
+        <div className="nav-container">
+          <div 
+            className="logo"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateToDashboard();
+            }}
+            style={{ cursor: 'pointer' }}
+          >
             <span className="logo-icon">🌿</span>
             <span className="logo-text">CarbonEx</span>
           </div>
-          <button className="back-link" onClick={onBack}>
-            ← Back to Dashboard
-          </button>
+          <div className="nav-links">
+            <a href="#dashboard" className="nav-tab" onClick={(e) => { e.preventDefault(); onNavigateToDashboard(); }}>
+              Dashboard
+            </a>
+            <a href="#recommendations" className="nav-tab" onClick={(e) => { e.preventDefault(); onNavigateToRecommendations(); }}>
+              Recommendations
+            </a>
+            <a href="#organization" className="nav-tab active">Organization Setup</a>
+            <a href="#settings" className="nav-tab" onClick={(e) => { e.preventDefault(); }}>Settings</a>
+            <a href="#help" className="nav-tab" onClick={(e) => { e.preventDefault(); }}>Help / Docs</a>
+            <div className="profile-dropdown">
+              <span 
+                className="user-icon" 
+                title={user?.name || 'User'}
+                onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+              >
+                👤
+              </span>
+              {showProfileDropdown && (
+                <div className="dropdown-menu">
+                  <div className="dropdown-header">
+                    <div className="dropdown-user-name">{user?.name || 'User'}</div>
+                    <div className="dropdown-user-email">{user?.email || 'user@example.com'}</div>
+                  </div>
+                  <div className="dropdown-divider"></div>
+                  <button className="dropdown-item" onClick={onLogout}>
+                    <span className="dropdown-icon">🚪</span>
+                    Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </nav>
 
       {/* Main Form Container */}
       <div className="setup-container">
@@ -414,13 +565,22 @@ function OrganizationSetup({ onComplete, onBack }) {
           <p className="setup-subtitle">
             Provide details below so CarbonEx can personalize your carbon tracking and forecasting dashboard.
           </p>
+          <button 
+            className="btn-quick-dashboard"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateToDashboard();
+            }}
+          >
+            Go to Dashboard
+          </button>
         </div>
 
         {/* Progress Bar */}
         <div className="progress-bar-container">
           <div className="progress-steps">
             <div className={`progress-step ${currentStep >= 0 ? 'active' : ''}`}>
-              <div className="step-circle">📁</div>
+              <div className="step-circle">0</div>
               <span className="step-label">Dataset</span>
             </div>
             <div className={`progress-line ${currentStep >= 1 ? 'active' : ''}`}></div>
@@ -449,7 +609,6 @@ function OrganizationSetup({ onComplete, onBack }) {
             {currentStep === 0 && (
               <div className="form-step step-0">
                 <h2 className="step-title">
-                  <span className="step-emoji">📊</span>
                   Upload Your Dataset
                 </h2>
                 <p className="step-description">
@@ -528,7 +687,6 @@ function OrganizationSetup({ onComplete, onBack }) {
             {currentStep === 1 && (
               <div className="form-step step-1">
                 <h2 className="step-title">
-                  <span className="step-emoji">🏢</span>
                   Organization Details
                 </h2>
                 <p className="step-description">Tell us about your organization</p>
@@ -593,7 +751,6 @@ function OrganizationSetup({ onComplete, onBack }) {
             {currentStep === 2 && (
               <div className="form-step step-2">
                 <h2 className="step-title">
-                  <span className="step-emoji">⚡</span>
                   Operations & Energy
                 </h2>
                 <p className="step-description">Help us understand your energy consumption</p>
@@ -759,7 +916,6 @@ function OrganizationSetup({ onComplete, onBack }) {
             {currentStep === 3 && (
               <div className="form-step step-3">
                 <h2 className="step-title">
-                  <span className="step-emoji">🎯</span>
                   Targets & Sustainability
                 </h2>
                 <p className="step-description">Set your sustainability goals and initiatives</p>
@@ -808,7 +964,6 @@ function OrganizationSetup({ onComplete, onBack }) {
                       />
                       <span className="checkbox-custom"></span>
                       <span className="checkbox-text">
-                        <span className="checkbox-icon">☀️</span>
                         Solar Panels
                       </span>
                     </label>
@@ -822,7 +977,6 @@ function OrganizationSetup({ onComplete, onBack }) {
                       />
                       <span className="checkbox-custom"></span>
                       <span className="checkbox-text">
-                        <span className="checkbox-icon">🚗</span>
                         EV Fleet
                       </span>
                     </label>
@@ -836,7 +990,6 @@ function OrganizationSetup({ onComplete, onBack }) {
                       />
                       <span className="checkbox-custom"></span>
                       <span className="checkbox-text">
-                        <span className="checkbox-icon">♻️</span>
                         Green Procurement
                       </span>
                     </label>
@@ -850,7 +1003,6 @@ function OrganizationSetup({ onComplete, onBack }) {
                       />
                       <span className="checkbox-custom"></span>
                       <span className="checkbox-text">
-                        <span className="checkbox-icon">🌳</span>
                         Carbon Offsets
                       </span>
                     </label>
@@ -862,13 +1014,103 @@ function OrganizationSetup({ onComplete, onBack }) {
                     ← Back
                   </button>
                   <button type="submit" className="btn-submit">
-                    Submit & Generate Dashboard ✨
+                    Submit & Generate Dashboard
                   </button>
                 </div>
               </div>
             )}
           </form>
         </div>
+
+        {/* Loading Progress Overlay */}
+        {isSubmitting && (
+          <div className="loading-overlay">
+            <div className="loading-card">
+              <div className="loading-spinner"></div>
+              <h3 className="loading-title">{submitProgress.step}</h3>
+              <div className="progress-bar-wrapper">
+                <div 
+                  className="progress-bar-fill" 
+                  style={{ width: `${submitProgress.percentage}%` }}
+                ></div>
+              </div>
+              <p className="loading-percentage">{submitProgress.percentage}%</p>
+            </div>
+          </div>
+        )}
+
+        {/* Success Card */}
+        {showSuccess && successData && (
+          <div className="success-overlay">
+            <div className="success-card">
+              <div className="success-icon-wrapper">
+                <svg className="success-checkmark" viewBox="0 0 52 52">
+                  <circle className="success-checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                  <path className="success-checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                </svg>
+              </div>
+              
+              <h2 className="success-title">Analysis Ready!</h2>
+              <p className="success-subtitle">Your organization has been successfully configured</p>
+              
+              <div className="success-details">
+                <div className="success-detail-group">
+                  <h3 className="success-section-title">Organization Details</h3>
+                  <div className="success-detail-row">
+                    <span className="detail-label">Name:</span>
+                    <span className="detail-value">{successData.organization.name}</span>
+                  </div>
+                  <div className="success-detail-row">
+                    <span className="detail-label">Industry:</span>
+                    <span className="detail-value">{successData.organization.industry}</span>
+                  </div>
+                  <div className="success-detail-row">
+                    <span className="detail-label">Employees:</span>
+                    <span className="detail-value">{successData.organization.employees}</span>
+                  </div>
+                  <div className="success-detail-row">
+                    <span className="detail-label">Location:</span>
+                    <span className="detail-value">{successData.organization.location}</span>
+                  </div>
+                </div>
+                
+                <div className="success-detail-group">
+                  <h3 className="success-section-title">Model Performance</h3>
+                  <div className="success-detail-row">
+                    <span className="detail-label">R² Score:</span>
+                    <span className="detail-value">{(successData.metrics.r2 * 100).toFixed(2)}%</span>
+                  </div>
+                  <div className="success-detail-row">
+                    <span className="detail-label">Accuracy:</span>
+                    <span className="detail-value">Excellent</span>
+                  </div>
+                  <div className="success-detail-row">
+                    <span className="detail-label">Status:</span>
+                    <span className="detail-value status-ready">Ready for Predictions</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="success-actions">
+                <button 
+                  className="btn-dashboard"
+                  onClick={() => {
+                    setShowSuccess(false);
+                    onNavigateToDashboard();
+                  }}
+                >
+                  Go to Dashboard
+                </button>
+                <button 
+                  className="btn-close"
+                  onClick={() => setShowSuccess(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
