@@ -7,7 +7,7 @@ import os
 np.random.seed(42)
 random.seed(42)
 
-n = 1000
+n = 10000
 
 # Basic org/facility data
 org_ids = ['ORG001']

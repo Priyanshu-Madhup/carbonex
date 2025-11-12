@@ -107,6 +107,16 @@ data/*.json
 *.sqlite
 *.sqlite3
 
+# Generated ML artifacts (training.py and dataset_generator.py outputs)
+backend/ecosphere_synthetic.csv
+backend/*.csv
+backend/emission_forecast_model.pkl
+backend/*.pkl
+backend/actual_vs_predicted.png
+backend/feature_importance.png
+backend/residuals_distribution.png
+backend/*.png
+
 # Logs
 logs/
 *.log
