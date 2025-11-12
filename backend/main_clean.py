@@ -6,12 +6,7 @@ import sqlite3
 import hashlib
 import secrets
 from datetime import datetime, timedelta
-from groq import Groq
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+from openai import OpenAI
 
 app = FastAPI()
 
@@ -134,9 +129,10 @@ class ChatRequest(BaseModel):
     message: str
     conversationHistory: List[ChatMessage] = []
 
-# Initialize Groq Client
-client = Groq(
-    api_key=os.environ.get("GROQ_API_KEY")
+# Initialize NVIDIA OpenAI Client
+client = OpenAI(
+    base_url="https://integrate.api.nvidia.com/v1",
+    api_key="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"
 )
 
 # Helper functions
@@ -414,7 +410,7 @@ Organization Data Context:
   * Carbon Offsets: {'Yes' if org_result[16] else 'No'}
 """
     
-    # Build conversation messages with HTML formatting instructions
+    # Build conversation messages for STEP 1
     messages = [
         {
             "role": "system",
@@ -430,44 +426,18 @@ Your role is to:
 4. Offer industry-specific sustainability best practices
 5. Help organizations meet their carbon neutrality goals
 
-CRITICAL - HTML FORMATTING RULES:
-You MUST format your entire response in clean HTML. Follow these rules strictly:
+RESPONSE GUIDELINES:
+- Be detailed and data-driven with specific recommendations
+- When showing data comparisons, clearly structure them with labels like "Energy Source | Percentage | Impact"
+- Use clear sections and subsections
+- Include emojis for visual appeal
+- Provide specific, actionable steps
+- Include timelines and phases when discussing roadmaps
+- Compare current state vs target state
+- Prioritize recommendations (High/Medium/Low priority)
+- Be conversational but professional
 
-1. Wrap everything in a <div> tag
-2. Use <h2> for main titles, <h3> for sections, <h4> for subsections
-3. For ANY data, comparisons, or structured information, use HTML tables:
-   <table>
-     <thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>
-     <tbody><tr><td>Data 1</td><td>Data 2</td></tr></tbody>
-   </table>
-4. Use <ul> and <li> for bullet points
-5. Use <ol> and <li> for numbered lists
-6. Use <p> tags for paragraphs
-7. Use <strong> for emphasis
-8. Add emojis in headings for visual appeal
-
-EXAMPLE RESPONSE FORMAT:
-<div>
-<h2>🌍 Your Carbon Roadmap</h2>
-<p>Here's your personalized plan based on your data.</p>
-
-<h3>📊 Current Energy Mix</h3>
-<table>
-<thead><tr><th>Energy Source</th><th>Percentage</th><th>Impact</th></tr></thead>
-<tbody>
-<tr><td>Electricity</td><td>40%</td><td>High</td></tr>
-<tr><td>Renewables</td><td>20%</td><td>Low</td></tr>
-</tbody>
-</table>
-
-<h3>✅ Recommendations</h3>
-<ul>
-<li><strong>Phase 1:</strong> Increase renewable energy to 40%</li>
-<li><strong>Phase 2:</strong> Implement energy efficiency audits</li>
-</ul>
-</div>
-
-Always return valid HTML. Be detailed and provide specific recommendations."""
+Focus on creating comprehensive, well-organized responses."""
         }
     ]
     
@@ -485,9 +455,9 @@ Always return valid HTML. Be detailed and provide specific recommendations."""
     })
     
     try:
-        # Call Groq API with HTML formatting in system prompt
+        # STEP 1: Call NVIDIA API for content generation (plain text)
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-20b",
             messages=messages,
             temperature=0.7,
             top_p=0.9,
@@ -495,9 +465,52 @@ Always return valid HTML. Be detailed and provide specific recommendations."""
             stream=False
         )
         
-        response_text = completion.choices[0].message.content
-        print(f"[LLM] Response received (length: {len(response_text)})")
-        print(f"[LLM] First 300 chars: {response_text[:300]}")
+        plain_response = completion.choices[0].message.content
+        print(f"[STEP 1] Plain response received: {plain_response[:200]}...")
+        
+        # STEP 2: Use second LLM call to convert to HTML
+        html_conversion_prompt = f"""Convert the following text into clean, well-structured HTML format.
+
+RULES:
+1. Wrap everything in a <div> tag
+2. Use <h2> for main titles, <h3> for sections, <h4> for subsections
+3. Convert ANY tabular data, comparisons, or structured lists into proper HTML tables with <thead> and <tbody>
+4. Use <ul> and <li> for bullet points
+5. Use <ol> and <li> for numbered lists
+6. Add badges for priorities: <span class="badge badge-success">text</span>, <span class="badge badge-warning">text</span>, <span class="badge badge-danger">text</span>
+7. Use <strong> for emphasis
+8. Add emojis in headings
+9. Use <p> tags for paragraphs
+
+TEXT TO CONVERT:
+{plain_response}
+
+Return ONLY the HTML, nothing else."""
+
+        html_completion = client.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an HTML formatting expert. Convert text to clean, semantic HTML. Always use tables for data comparisons and structured information."
+                },
+                {
+                    "role": "user",
+                    "content": html_conversion_prompt
+                }
+            ],
+            temperature=0.3,
+            top_p=0.9,
+            max_tokens=3000,
+            stream=False
+        )
+        
+        response_text = html_completion.choices[0].message.content
+        print(f"[STEP 2] HTML response received: {response_text[:200]}...")
+        
+        # Ensure response is wrapped in div if not already
+        if not response_text.strip().startswith('<div>'):
+            response_text = f'<div>{response_text}</div>'
         
         return {
             "response": response_text,
