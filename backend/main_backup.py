@@ -6,12 +6,7 @@ import sqlite3
 import hashlib
 import secrets
 from datetime import datetime, timedelta
-from groq import Groq
-import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+from openai import OpenAI
 
 app = FastAPI()
 
@@ -124,21 +119,6 @@ class OrganizationSetup(BaseModel):
 class LogoutRequest(BaseModel):
     token: str
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-    timestamp: Optional[str] = None
-
-class ChatRequest(BaseModel):
-    token: str
-    message: str
-    conversationHistory: List[ChatMessage] = []
-
-# Initialize Groq Client
-client = Groq(
-    api_key=os.environ.get("GROQ_API_KEY")
-)
-
 # Helper functions
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -250,6 +230,9 @@ async def verify(token: str):
         "name": result[1],
         "email": result[2]
     }
+
+class LogoutRequest(BaseModel):
+    token: str
 
 @app.post("/api/logout")
 async def logout(request: LogoutRequest):
@@ -373,6 +356,23 @@ async def get_organization(token: str):
         "updatedAt": result[18]
     }
 
+# Chat Models
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+    timestamp: Optional[str] = None
+
+class ChatRequest(BaseModel):
+    token: str
+    message: str
+    conversationHistory: List[ChatMessage] = []
+
+# Initialize NVIDIA OpenAI Client
+client = OpenAI(
+    base_url="https://integrate.api.nvidia.com/v1",
+    api_key="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"
+)
+
 @app.post("/api/chat")
 async def chat_with_ai(request: ChatRequest):
     # Verify token and get user_id
@@ -414,7 +414,7 @@ Organization Data Context:
   * Carbon Offsets: {'Yes' if org_result[16] else 'No'}
 """
     
-    # Build conversation messages with HTML formatting instructions
+    # Build conversation messages
     messages = [
         {
             "role": "system",
@@ -430,44 +430,134 @@ Your role is to:
 4. Offer industry-specific sustainability best practices
 5. Help organizations meet their carbon neutrality goals
 
-CRITICAL - HTML FORMATTING RULES:
-You MUST format your entire response in clean HTML. Follow these rules strictly:
+RESPONSE GUIDELINES:
+- Be detailed and data-driven with specific recommendations
+- When showing data comparisons, clearly list items with their attributes (e.g., "Energy Source | Percentage | Impact")
+- Structure information clearly with main sections and subsections
+- Include emojis for visual appeal
+- Provide specific, actionable steps
+- Include timelines and phases when discussing roadmaps
+- Compare current state vs target state
+- Prioritize recommendations (High/Medium/Low priority)
+- Be conversational but professional
 
-1. Wrap everything in a <div> tag
-2. Use <h2> for main titles, <h3> for sections, <h4> for subsections
-3. For ANY data, comparisons, or structured information, use HTML tables:
-   <table>
-     <thead><tr><th>Column 1</th><th>Column 2</th></tr></thead>
-     <tbody><tr><td>Data 1</td><td>Data 2</td></tr></tbody>
-   </table>
-4. Use <ul> and <li> for bullet points
-5. Use <ol> and <li> for numbered lists
-6. Use <p> tags for paragraphs
-7. Use <strong> for emphasis
-8. Add emojis in headings for visual appeal
+Focus on creating comprehensive, well-organized responses that can be easily formatted into tables and sections."""
+        }
+    ]
+    
+    # Add conversation history (last 5 messages for context)
+    for msg in request.conversationHistory[-5:]:
+        messages.append({
+            "role": msg.role,
+            "content": msg.content
+        })
+    
+    # Add current message
+    messages.append({
+        "role": "user",
+        "content": request.message
+    })
+    """
+        }
+    ]
+    
+    # Add conversation history (last 5 messages for context)
+    for msg in request.conversationHistory[-5:]:"""
+        }
+    ]
+- Use <p> tags for paragraphs
+- Use <strong> for important text
+- Use <br> for line breaks
+- Add priority badges: <span class="badge badge-success">Low</span>, <span class="badge badge-warning">Medium</span>, <span class="badge badge-danger">High</span>, <span class="badge badge-info">Info</span>
 
-EXAMPLE RESPONSE FORMAT:
+EXAMPLE RESPONSE FORMAT (ALWAYS USE THIS STRUCTURE):
 <div>
-<h2>🌍 Your Carbon Roadmap</h2>
-<p>Here's your personalized plan based on your data.</p>
+<h2>� Tata Steel - Company Overview</h2>
+<p>Here's a comprehensive analysis of your organization's carbon footprint and path to net-zero by 2040.</p>
 
 <h3>📊 Current Energy Mix</h3>
 <table>
-<thead><tr><th>Energy Source</th><th>Percentage</th><th>Impact</th></tr></thead>
+<thead>
+<tr>
+  <th>Energy Source</th>
+  <th>Current %</th>
+  <th>CO2 Impact</th>
+  <th>Priority</th>
+</tr>
+</thead>
 <tbody>
-<tr><td>Electricity</td><td>40%</td><td>High</td></tr>
-<tr><td>Renewables</td><td>20%</td><td>Low</td></tr>
+<tr>
+  <td>⚡ Electricity</td>
+  <td>40%</td>
+  <td>High</td>
+  <td><span class="badge badge-danger">Critical</span></td>
+</tr>
+<tr>
+  <td>🛢️ Diesel</td>
+  <td>30%</td>
+  <td>Medium</td>
+  <td><span class="badge badge-warning">Medium</span></td>
+</tr>
+<tr>
+  <td>🔥 LPG</td>
+  <td>20%</td>
+  <td>Low</td>
+  <td><span class="badge badge-success">Low</span></td>
+</tr>
+<tr>
+  <td>🌞 Renewables</td>
+  <td>10%</td>
+  <td>Zero</td>
+  <td><span class="badge badge-success">Excellent</span></td>
+</tr>
 </tbody>
 </table>
 
-<h3>✅ Recommendations</h3>
-<ul>
-<li><strong>Phase 1:</strong> Increase renewable energy to 40%</li>
-<li><strong>Phase 2:</strong> Implement energy efficiency audits</li>
-</ul>
+<h3>🎯 Roadmap to Net-Zero by 2040</h3>
+<table>
+<thead>
+<tr>
+  <th>Phase</th>
+  <th>Years</th>
+  <th>Key Actions</th>
+  <th>Target Reduction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>Phase 1</strong></td>
+  <td>2025-2030</td>
+  <td>
+    <ul>
+      <li>Install 50 MW solar capacity</li>
+      <li>Electrify 30% of fleet</li>
+    </ul>
+  </td>
+  <td>20%</td>
+</tr>
+<tr>
+  <td><strong>Phase 2</strong></td>
+  <td>2031-2035</td>
+  <td>
+    <ul>
+      <li>Transition to green hydrogen</li>
+      <li>Complete fleet electrification</li>
+    </ul>
+  </td>
+  <td>30%</td>
+</tr>
+</tbody>
+</table>
+
+<h3>💡 Top 3 Recommendations</h3>
+<ol>
+  <li><strong>Increase renewable energy to 50%</strong> - Install on-site solar panels and sign PPAs</li>
+  <li><strong>Optimize diesel usage</strong> - Implement route optimization and preventive maintenance</li>
+  <li><strong>Expand carbon offset programs</strong> - Invest in verified forestry projects</li>
+</ol>
 </div>
 
-Always return valid HTML. Be detailed and provide specific recommendations."""
+REMEMBER: ALWAYS format data, comparisons, and statistics in HTML tables. Never use plain text formatting."""
         }
     ]
     
@@ -485,9 +575,9 @@ Always return valid HTML. Be detailed and provide specific recommendations."""
     })
     
     try:
-        # Call Groq API with HTML formatting in system prompt
+        # STEP 1: Call NVIDIA API for content generation (plain text)
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-20b",
             messages=messages,
             temperature=0.7,
             top_p=0.9,
@@ -495,9 +585,57 @@ Always return valid HTML. Be detailed and provide specific recommendations."""
             stream=False
         )
         
-        response_text = completion.choices[0].message.content
-        print(f"[LLM] Response received (length: {len(response_text)})")
-        print(f"[LLM] First 300 chars: {response_text[:300]}")
+        plain_response = completion.choices[0].message.content
+        print(f"Plain response received: {plain_response[:200]}...")
+        
+        # STEP 2: Use second LLM call to convert to HTML
+        html_conversion_prompt = f"""Convert the following text into clean, well-structured HTML format.
+
+RULES:
+1. Wrap everything in a <div> tag
+2. Use <h2> for main titles, <h3> for sections, <h4> for subsections
+3. Convert any tabular data or comparisons into proper HTML <table> with <thead> and <tbody>
+4. Use <ul> and <li> for bullet points
+5. Use <ol> and <li> for numbered lists
+6. Add badges for priorities: <span class="badge badge-success">text</span>, <span class="badge badge-warning">text</span>, <span class="badge badge-danger">text</span>
+7. Use <strong> for emphasis
+8. Add emojis in headings
+9. Use <p> tags for paragraphs
+
+TEXT TO CONVERT:
+{plain_response}
+
+Return ONLY the HTML, nothing else."""
+
+        html_completion = client.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an HTML formatting expert. Convert text to clean, semantic HTML. Always wrap content in tables when showing data comparisons or lists of items with multiple attributes."
+                },
+                {
+                    "role": "user",
+                    "content": html_conversion_prompt
+                }
+            ],
+            temperature=0.3,
+            top_p=0.9,
+            max_tokens=3000,
+            stream=False
+        )
+        
+        response_text = html_completion.choices[0].message.content
+        print(f"HTML response received: {response_text[:200]}...")
+        
+        # Ensure response is wrapped in div if not already
+        if not response_text.strip().startswith('<div>'):
+            response_text = f'<div>{response_text}</div>'
+        
+        # Basic HTML validation - if response doesn't contain any HTML tags, use plain response
+        if '<table>' not in response_text and '<h2>' not in response_text:
+            # Fallback: manually format the plain response
+            response_text = f'<div><p>{plain_response.replace(chr(10), "</p><p>")}</p></div>'
         
         return {
             "response": response_text,

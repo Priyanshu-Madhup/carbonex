@@ -1,6 +1,6 @@
-# EcoSphere AI - Backend Setup
+# CarbonEx - Backend Setup
 
-This is the FastAPI backend for the EcoSphere AI platform with SQLite-based authentication.
+This is the FastAPI backend for the CarbonEx platform with SQLite-based authentication.
 
 ## Prerequisites
 

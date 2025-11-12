@@ -70,6 +70,8 @@ venv.bak/
 .env.development.local
 .env.test.local
 .env.production.local
+backend/.env
+backend/.env.local
 
 # React / Node.js
 node_modules/

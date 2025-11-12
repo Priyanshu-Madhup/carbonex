@@ -60,7 +60,7 @@ function Login({ onClose, onSwitchToSignup, onLoginSuccess }) {
         <button className="close-btn" onClick={onClose}>✕</button>
         <div className="auth-header">
           <h2>Welcome Back</h2>
-          <p>Login to your EcoSphere AI account</p>
+          <p>Login to your CarbonEx account</p>
         </div>
         
         <form className="auth-form" onSubmit={handleSubmit}>
