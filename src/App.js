@@ -3,11 +3,13 @@ import './App.css';
 import Login from './components/Login';
 import Signup from './components/Signup';
 import OrganizationSetup from './components/OrganizationSetup';
+import Recommendations from './components/Recommendations';
 
 function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
   const [showOrgSetup, setShowOrgSetup] = useState(false);
+  const [showRecommendations, setShowRecommendations] = useState(false);
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -47,8 +49,13 @@ function App() {
 
   return (
     <div className="App">
-      {/* Show Organization Setup if activated */}
-      {showOrgSetup ? (
+      {/* Show Recommendations if activated */}
+      {showRecommendations ? (
+        <Recommendations
+          onBack={() => setShowRecommendations(false)}
+        />
+      ) : /* Show Organization Setup if activated */
+      showOrgSetup ? (
         <OrganizationSetup
           onComplete={() => setShowOrgSetup(false)}
           onBack={() => setShowOrgSetup(false)}
@@ -97,7 +104,9 @@ function App() {
             {user ? (
               <>
                 <a href="#dashboard" className="nav-tab">Dashboard</a>
-                <a href="#recommendations" className="nav-tab">Recommendations</a>
+                <a href="#recommendations" className="nav-tab" onClick={(e) => { e.preventDefault(); setShowRecommendations(true); }}>
+                  Recommendations
+                </a>
                 <a href="#organization" className="nav-tab" onClick={(e) => { e.preventDefault(); setShowOrgSetup(true); }}>
                   Organization Setup
                 </a>
