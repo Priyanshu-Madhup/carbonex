@@ -90,6 +90,45 @@
   color: #00BFA6;
 }
 
+.user-name {
+  color: #00BFA6;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.login-btn {
+  padding: 0.7rem 1.5rem;
+  background: transparent;
+  color: #00BFA6;
+  border: 2px solid #00BFA6;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.login-btn:hover {
+  background: #00BFA6;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.logout-btn {
+  padding: 0.7rem 1.5rem;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.logout-btn:hover {
+  background: #d32f2f;
+  transform: translateY(-2px);
+}
+
 .signup-btn {
   padding: 0.7rem 1.5rem;
   background: linear-gradient(135deg, #00BFA6, #00D4B8);

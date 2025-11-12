@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import './App.css';
+import Login from './components/Login';
+import Signup from './components/Signup';
 
 function App() {
   const [scrollY, setScrollY] = useState(0);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -10,8 +15,63 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    // Check if user is already logged in
+    const token = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    if (token && savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  const handleLoginSuccess = (userData) => {
+    setUser(userData);
+  };
+
+  const handleSignupSuccess = (userData) => {
+    setUser(userData);
+  };
+
+  const handleLogout = () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetch('http://localhost:8000/api/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+    }
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+  };
+
   return (
     <div className="App">
+      {/* Auth Modals */}
+      {showLogin && (
+        <Login
+          onClose={() => setShowLogin(false)}
+          onSwitchToSignup={() => {
+            setShowLogin(false);
+            setShowSignup(true);
+          }}
+          onLoginSuccess={handleLoginSuccess}
+        />
+      )}
+      {showSignup && (
+        <Signup
+          onClose={() => setShowSignup(false)}
+          onSwitchToLogin={() => {
+            setShowSignup(false);
+            setShowLogin(true);
+          }}
+          onSignupSuccess={handleSignupSuccess}
+        />
+      )}
+
       {/* Floating Background Elements */}
       <div className="floating-icons">
         <span className="float-icon leaf">🌿</span>
@@ -32,8 +92,17 @@ function App() {
             <a href="#home">Home</a>
             <a href="#features">Features</a>
             <a href="#dashboard">Dashboard</a>
-            <a href="#login">Login</a>
-            <button className="signup-btn">Signup</button>
+            {user ? (
+              <>
+                <span className="user-name">Hi, {user.name}!</span>
+                <button className="logout-btn" onClick={handleLogout}>Logout</button>
+              </>
+            ) : (
+              <>
+                <button className="login-btn" onClick={() => setShowLogin(true)}>Login</button>
+                <button className="signup-btn" onClick={() => setShowSignup(true)}>Signup</button>
+              </>
+            )}
           </div>
         </div>
       </nav>

@@ -1,10 +1,131 @@
-# Getting Started with Create React App
+# EcoSphere AI - Eco-Themed Landing Page
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A visually stunning, eco-themed landing page for EcoSphere AI platform with functional authentication system. Built with React and FastAPI.
+
+## Features
+
+- 🌿 Beautiful eco-friendly design with smooth animations
+- 🔐 Functional login and signup system
+- 💾 SQLite-based authentication
+- 🎨 Glassmorphism effects and gradient designs
+- 📱 Fully responsive layout
+- ⚡ Real-time session management
+
+## Tech Stack
+
+**Frontend:**
+- React 18
+- CSS3 with animations
+- LocalStorage for session persistence
+
+**Backend:**
+- FastAPI
+- SQLite
+- SHA-256 password hashing
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v14 or higher)
+- Python 3.8 or higher
+- npm or yarn
+
+### Installation
+
+1. **Clone the repository:**
+```bash
+git clone https://github.com/Priyanshu-Madhup/carbonex.git
+cd carbonex
+```
+
+2. **Install frontend dependencies:**
+```bash
+npm install
+```
+
+3. **Install backend dependencies:**
+```bash
+cd backend
+pip install -r requirements.txt
+cd ..
+```
+
+### Running the Application
+
+You need to run both the backend and frontend servers:
+
+**Terminal 1 - Start the Backend:**
+```bash
+cd backend
+python main.py
+```
+Backend will run on `http://localhost:8000`
+
+**Terminal 2 - Start the Frontend:**
+```bash
+npm start
+```
+Frontend will run on `http://localhost:3000`
+
+The browser should automatically open to `http://localhost:3000`
+
+## Usage
+
+1. Click the **Signup** button in the navbar to create a new account
+2. Fill in your name, email, and password
+3. After successful signup, you'll be automatically logged in
+4. Use the **Login** button to sign in with existing credentials
+5. Click **Logout** to end your session
+
+## API Endpoints
+
+- `POST /api/signup` - Register a new user
+- `POST /api/login` - Login with credentials
+- `GET /api/verify` - Verify authentication token
+- `POST /api/logout` - Logout and clear session
+
+## Project Structure
+
+```
+carbonex/
+├── backend/
+│   ├── main.py              # FastAPI application
+│   ├── requirements.txt     # Python dependencies
+│   └── README.md           # Backend documentation
+├── src/
+│   ├── components/
+│   │   ├── Login.js        # Login component
+│   │   ├── Signup.js       # Signup component
+│   │   └── Auth.css        # Auth styling
+│   ├── App.js              # Main React component
+│   ├── App.css             # Main styling
+│   └── index.js            # React entry point
+└── package.json            # Frontend dependencies
+```
+
+## Security Notes
+
+This is a basic authentication system for demonstration purposes. For production deployment:
+- Use bcrypt or Argon2 for password hashing
+- Implement rate limiting
+- Add HTTPS/SSL
+- Use environment variables for configuration
+- Implement CSRF protection
+- Add email verification
+- Use JWT tokens with proper expiration
+
+## Contributing
+
+Feel free to submit issues and pull requests!
+
+## License
+
+This project is open source and available under the MIT License.
+
+---
 
 ## Available Scripts
-
-In the project directory, you can run:
 
 ### `npm start`
 
