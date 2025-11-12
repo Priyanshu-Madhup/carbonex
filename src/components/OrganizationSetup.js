@@ -221,6 +221,27 @@ function OrganizationSetup({ onNavigateToDashboard, onNavigateToRecommendations,
             const result = await trainResponse.json();
             console.log('Model trained successfully:', result.metrics);
             
+            // Step 4: Generate AI insights from charts
+            setSubmitProgress({ step: 'Generating AI insights...', percentage: 85 });
+            
+            try {
+              const insightsResponse = await fetch(
+                `http://localhost:8000/api/ml/generate-insights/ORG001?session_token=${token}`,
+                {
+                  method: 'POST'
+                }
+              );
+
+              if (insightsResponse.ok) {
+                const insightsResult = await insightsResponse.json();
+                console.log('AI insights generated:', insightsResult.insight);
+              } else {
+                console.warn('Insights generation failed, but continuing...');
+              }
+            } catch (error) {
+              console.warn('Error generating insights:', error);
+            }
+            
             setSubmitProgress({ step: 'Complete!', percentage: 100 });
             
             // Store success data for the success card

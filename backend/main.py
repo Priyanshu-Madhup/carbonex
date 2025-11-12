@@ -11,6 +11,13 @@ import os
 from dotenv import load_dotenv
 import shutil
 from pathlib import Path
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+import base64
+from io import BytesIO
 
 # Load environment variables
 load_dotenv()
@@ -80,6 +87,19 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS emission_insights (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id TEXT NOT NULL,
+            insight_text TEXT NOT NULL,
+            chart_image_base64 TEXT,
+            historical_mean REAL,
+            historical_std REAL,
+            forecast_mean REAL,
+            forecast_std REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     conn.commit()
@@ -172,6 +192,167 @@ def verify_token(token: str) -> Optional[int]:
     result = cursor.fetchone()
     conn.close()
     return result[0] if result else None
+
+
+def generate_emission_charts(organization_id: str) -> Dict[str, str]:
+    """
+    Generate matplotlib charts for historical and forecast data
+    Returns base64 encoded images
+    """
+    try:
+        backend_dir = Path(__file__).parent
+        csv_path = backend_dir / "ecosphere_synthetic.csv"
+        model_path = backend_dir / "xgboost_emission_model.pkl"
+        
+        # Read historical data
+        df = pd.read_csv(csv_path)
+        org_data = df[df['organization_id'] == organization_id].copy()
+        org_data['week_start_date'] = pd.to_datetime(org_data['week_start_date'])
+        org_data = org_data.sort_values('week_start_date')
+        last_52_weeks = org_data.tail(52)
+        
+        # Get forecast data
+        from train_xgboost_model import EmissionForecaster
+        forecaster = EmissionForecaster.load(str(model_path))
+        forecast_df = forecaster.predict_52_weeks(str(csv_path), organization_id)
+        
+        # Create figure with 2 subplots
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
+        fig.patch.set_facecolor('#f8fafc')
+        
+        # Historical Chart
+        weeks_hist = [f"W{i+1}" for i in range(len(last_52_weeks))]
+        emissions_hist = last_52_weeks['total_emissions_tco2e'].values
+        
+        ax1.bar(weeks_hist, emissions_hist, color='#00bfa6', alpha=0.8, edgecolor='#008577', linewidth=1.5)
+        ax1.set_title('Historical Emissions Data (Last 52 Weeks)', fontsize=16, fontweight='bold', pad=20)
+        ax1.set_xlabel('Week', fontsize=12, fontweight='bold')
+        ax1.set_ylabel('Total Emissions (tCO₂e)', fontsize=12, fontweight='bold')
+        ax1.grid(axis='y', alpha=0.3, linestyle='--')
+        ax1.set_facecolor('#ffffff')
+        
+        # Add statistics text
+        stats_text = f"Mean: {emissions_hist.mean():.2f} | Std: {emissions_hist.std():.2f} | Min: {emissions_hist.min():.2f} | Max: {emissions_hist.max():.2f} tCO₂e"
+        ax1.text(0.5, 0.98, stats_text, transform=ax1.transAxes, fontsize=10,
+                verticalalignment='top', horizontalalignment='center',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        # Set x-axis ticks to show every 4th week
+        tick_positions = list(range(0, len(weeks_hist), 4))
+        ax1.set_xticks(tick_positions)
+        ax1.set_xticklabels([weeks_hist[i] for i in tick_positions], rotation=45)
+        
+        # Forecast Chart
+        weeks_forecast = [f"W{i+1}" for i in range(len(forecast_df))]
+        emissions_forecast = [p['predicted_emissions'] for p in forecast_df]
+        
+        ax2.bar(weeks_forecast, emissions_forecast, color='#667eea', alpha=0.8, edgecolor='#4c51bf', linewidth=1.5)
+        ax2.set_title('52-Week Emission Forecast (ML Prediction)', fontsize=16, fontweight='bold', pad=20)
+        ax2.set_xlabel('Week', fontsize=12, fontweight='bold')
+        ax2.set_ylabel('Predicted Emissions (tCO₂e)', fontsize=12, fontweight='bold')
+        ax2.grid(axis='y', alpha=0.3, linestyle='--')
+        ax2.set_facecolor('#ffffff')
+        
+        # Add forecast statistics
+        forecast_mean = np.mean(emissions_forecast)
+        forecast_std = np.std(emissions_forecast)
+        forecast_min = np.min(emissions_forecast)
+        forecast_max = np.max(emissions_forecast)
+        forecast_stats = f"Mean: {forecast_mean:.2f} | Std: {forecast_std:.2f} | Min: {forecast_min:.2f} | Max: {forecast_max:.2f} tCO₂e"
+        ax2.text(0.5, 0.98, forecast_stats, transform=ax2.transAxes, fontsize=10,
+                verticalalignment='top', horizontalalignment='center',
+                bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
+        
+        # Set x-axis ticks to show every 4th week
+        ax2.set_xticks(tick_positions)
+        ax2.set_xticklabels([weeks_forecast[i] for i in tick_positions], rotation=45)
+        
+        plt.tight_layout()
+        
+        # Save to base64
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.read()).decode()
+        plt.close()
+        
+        return {
+            "image_base64": image_base64,
+            "historical_stats": {
+                "mean": float(emissions_hist.mean()),
+                "std": float(emissions_hist.std()),
+                "min": float(emissions_hist.min()),
+                "max": float(emissions_hist.max())
+            },
+            "forecast_stats": {
+                "mean": float(forecast_mean),
+                "std": float(forecast_std),
+                "min": float(forecast_min),
+                "max": float(forecast_max)
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error generating charts: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+
+def analyze_charts_with_ai(image_base64: str, historical_stats: dict, forecast_stats: dict) -> str:
+    """
+    Use Groq Vision API to analyze emission charts and generate insights
+    Returns concise 2-3 line insight
+    """
+    try:
+        # Create data URL for the image
+        image_url = f"data:image/png;base64,{image_base64}"
+        
+        completion = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"""Analyze these carbon emission charts and provide a concise 2-3 line insight.
+
+Historical Stats: Mean={historical_stats['mean']:.2f}, Std={historical_stats['std']:.2f}, Min={historical_stats['min']:.2f}, Max={historical_stats['max']:.2f} tCO₂e
+Forecast Stats: Mean={forecast_stats['mean']:.2f}, Std={forecast_stats['std']:.2f}, Min={forecast_stats['min']:.2f}, Max={forecast_stats['max']:.2f} tCO₂e
+
+Focus on:
+1. Key trend differences between historical and forecast
+2. Any concerning patterns or positive changes
+3. Actionable insight for emissions reduction
+
+Keep response to 2-3 sentences maximum."""
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": image_url
+                            }
+                        }
+                    ]
+                }
+            ],
+            temperature=0.7,
+            max_completion_tokens=200,
+            top_p=1,
+            stream=False,
+            stop=None,
+        )
+        
+        insight = completion.choices[0].message.content.strip()
+        return insight
+        
+    except Exception as e:
+        print(f"Error analyzing charts with AI: {e}")
+        import traceback
+        traceback.print_exc()
+        return "Unable to generate AI insights at this time."
+
 
 # API endpoints
 @app.post("/api/signup", response_model=UserResponse)
@@ -394,6 +575,16 @@ async def chat_with_ai(request: ChatRequest):
         FROM organizations WHERE user_id = ?
     """, (user_id,))
     org_result = cursor.fetchone()
+    
+    # Get AI insights for the organization (using ORG001 as default)
+    cursor.execute("""
+        SELECT insight_text, historical_mean, forecast_mean
+        FROM emission_insights
+        WHERE organization_id = 'ORG001'
+        ORDER BY created_at DESC
+        LIMIT 1
+    """)
+    insight_result = cursor.fetchone()
     conn.close()
     
     # Build context about the organization
@@ -416,6 +607,19 @@ Organization Data Context:
   * Carbon Offsets: {'Yes' if org_result[16] else 'No'}
 """
     
+    # Add AI-generated insights to context
+    insights_context = ""
+    if insight_result:
+        insights_context = f"""
+
+📊 AI-POWERED EMISSION ANALYSIS:
+{insight_result[0]}
+
+Historical Average: {insight_result[1]:.2f} tCO₂e | Forecast Average: {insight_result[2]:.2f} tCO₂e
+
+Use these data-driven insights when providing recommendations and answering questions about emission patterns.
+"""
+    
     # Build conversation messages with HTML formatting instructions
     messages = [
         {
@@ -424,6 +628,7 @@ Organization Data Context:
 You help organizations reduce their carbon footprint and achieve net-zero goals.
 
 {org_context}
+{insights_context}
 
 Your role is to:
 1. Provide actionable carbon reduction recommendations
@@ -817,6 +1022,139 @@ async def get_historical_data(organization_id: str, session_token: str = None):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to get historical data: {str(e)}")
+
+
+@app.post("/api/ml/generate-insights/{organization_id}")
+async def generate_insights(organization_id: str, session_token: str = None):
+    """
+    Generate AI insights from emission charts using Groq Vision API
+    Should be called after model training
+    """
+    try:
+        # Verify session
+        if not session_token:
+            raise HTTPException(status_code=401, detail="Session token required")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?",
+            (session_token, datetime.now())
+        )
+        session = cursor.fetchone()
+        if not session:
+            conn.close()
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
+        # Generate charts
+        print(f"Generating charts for {organization_id}...")
+        chart_data = generate_emission_charts(organization_id)
+        
+        # Analyze with AI
+        print(f"Analyzing charts with AI...")
+        insight = analyze_charts_with_ai(
+            chart_data['image_base64'],
+            chart_data['historical_stats'],
+            chart_data['forecast_stats']
+        )
+        
+        # Store in database
+        cursor.execute("""
+            INSERT INTO emission_insights 
+            (organization_id, insight_text, chart_image_base64, 
+             historical_mean, historical_std, forecast_mean, forecast_std)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            organization_id,
+            insight,
+            chart_data['image_base64'],
+            chart_data['historical_stats']['mean'],
+            chart_data['historical_stats']['std'],
+            chart_data['forecast_stats']['mean'],
+            chart_data['forecast_stats']['std']
+        ))
+        conn.commit()
+        conn.close()
+        
+        print(f"Insights generated successfully: {insight}")
+        
+        return {
+            "message": "Insights generated successfully",
+            "organization_id": organization_id,
+            "insight": insight,
+            "historical_stats": chart_data['historical_stats'],
+            "forecast_stats": chart_data['forecast_stats']
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating insights: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to generate insights: {str(e)}")
+
+
+@app.get("/api/ml/insights/{organization_id}")
+async def get_insights(organization_id: str, session_token: str = None):
+    """
+    Retrieve stored AI insights for organization
+    """
+    try:
+        # Verify session
+        if not session_token:
+            raise HTTPException(status_code=401, detail="Session token required")
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?",
+            (session_token, datetime.now())
+        )
+        session = cursor.fetchone()
+        if not session:
+            conn.close()
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        
+        # Get latest insight
+        cursor.execute("""
+            SELECT insight_text, historical_mean, historical_std, 
+                   forecast_mean, forecast_std, created_at
+            FROM emission_insights
+            WHERE organization_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (organization_id,))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if not result:
+            return {
+                "organization_id": organization_id,
+                "insight": None,
+                "message": "No insights available. Please generate insights first."
+            }
+        
+        return {
+            "organization_id": organization_id,
+            "insight": result[0],
+            "historical_stats": {
+                "mean": result[1],
+                "std": result[2]
+            },
+            "forecast_stats": {
+                "mean": result[3],
+                "std": result[4]
+            },
+            "generated_at": result[5]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting insights: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get insights: {str(e)}")
 
 # ==================== END ML ENDPOINTS ====================
 
