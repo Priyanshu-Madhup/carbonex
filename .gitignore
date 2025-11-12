@@ -49,7 +49,7 @@ env/
 ENV/
 env.bak/
 venv.bak/
-.venv
+.venv/
 .env/
 
 # IDE
