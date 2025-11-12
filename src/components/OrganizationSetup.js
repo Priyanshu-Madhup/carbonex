@@ -221,9 +221,10 @@ function OrganizationSetup({ onNavigateToDashboard, onNavigateToRecommendations,
             const result = await trainResponse.json();
             console.log('Model trained successfully:', result.metrics);
             
-            // Step 4: Generate AI insights from charts
-            setSubmitProgress({ step: 'Generating AI insights...', percentage: 85 });
+            // Step 4: Generate AI insights from charts (this takes time)
+            setSubmitProgress({ step: 'Analyzing emissions with AI...', percentage: 80 });
             
+            let insightsGenerated = false;
             try {
               const insightsResponse = await fetch(
                 `http://localhost:8000/api/ml/generate-insights/ORG001?session_token=${token}`,
@@ -234,14 +235,23 @@ function OrganizationSetup({ onNavigateToDashboard, onNavigateToRecommendations,
 
               if (insightsResponse.ok) {
                 const insightsResult = await insightsResponse.json();
-                console.log('AI insights generated:', insightsResult.insight);
+                console.log('✅ AI insights generated:', insightsResult.insight);
+                insightsGenerated = true;
+                
+                // Update progress after insights are done
+                setSubmitProgress({ step: 'Finalizing...', percentage: 95 });
               } else {
-                console.warn('Insights generation failed, but continuing...');
+                const errorText = await insightsResponse.text();
+                console.error('Insights generation failed:', errorText);
+                alert('Model trained successfully, but AI insights generation failed. You can still use the dashboard.');
               }
             } catch (error) {
-              console.warn('Error generating insights:', error);
+              console.error('Error generating insights:', error);
+              alert('Model trained successfully, but AI insights generation failed. You can still use the dashboard.');
             }
             
+            // Short delay to show final progress
+            await new Promise(resolve => setTimeout(resolve, 500));
             setSubmitProgress({ step: 'Complete!', percentage: 100 });
             
             // Store success data for the success card
@@ -252,15 +262,17 @@ function OrganizationSetup({ onNavigateToDashboard, onNavigateToRecommendations,
                 employees: formData.numEmployees,
                 location: `${formData.city}, ${formData.country}`
               },
-              metrics: result.metrics
+              metrics: result.metrics,
+              insightsGenerated: insightsGenerated
             });
             
+            // Delay before showing success card
             setTimeout(() => {
               setIsSubmitting(false);
               setShowSuccess(true);
               setViewMode(true);
               setIsEditing(false);
-            }, 500);
+            }, 800);
           } else {
             console.error('Model training failed');
             setIsSubmitting(false);
@@ -1109,6 +1121,12 @@ function OrganizationSetup({ onNavigateToDashboard, onNavigateToRecommendations,
                     <span className="detail-label">Status:</span>
                     <span className="detail-value status-ready">Ready for Predictions</span>
                   </div>
+                  {successData.insightsGenerated && (
+                    <div className="success-detail-row">
+                      <span className="detail-label">AI Insights:</span>
+                      <span className="detail-value status-ready">✓ Generated</span>
+                    </div>
+                  )}
                 </div>
               </div>
               
