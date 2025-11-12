@@ -1,13 +1,19 @@
-# Regenerate synthetic dataset (1000 rows) and train a GradientBoostingRegressor model.
-# This script creates the dataset, saves it, performs training with cross-validation, and saves the model.
-import random as rnd
+"""
+Enhanced Emission Forecast Training Pipeline
+
+Trains machine learning models to predict weekly carbon emissions using
+time series cross-validation and automated model selection.
+Features temporal, operational, and categorical (country, industry) data.
+"""
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
-import random
 import os
 import logging
 import warnings
+import random
+from datetime import datetime
+from typing import Dict, List, Tuple
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
@@ -15,7 +21,12 @@ from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import cross_val_score, TimeSeriesSplit
 import joblib
-import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')  # Headless backend for server environments
+
+# ====================
+# CONFIGURATION
+# ====================
 
 # Configure logging
 logging.basicConfig(
@@ -25,177 +36,180 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 warnings.filterwarnings('ignore', category=FutureWarning)
 
+# Model hyperparameters
+MODEL_CONFIG = {
+    'GradientBoosting': {
+        'n_estimators': 100,
+        'learning_rate': 0.05,
+        'max_depth': 5,
+        'random_state': 42,
+        'verbose': 0
+    },
+    'RandomForest': {
+        'n_estimators': 100,
+        'max_depth': 10,
+        'random_state': 42,
+        'n_jobs': -1,
+        'verbose': 0
+    },
+    'Ridge': {
+        'alpha': 1.0,
+        'random_state': 42
+    }
+}
 
-# Small helper to show DataFrames in environments without `ace_tools` (CLI friendly).
-def display_dataframe_to_user(title, df, max_rows=10):
-    """Print a DataFrame to the console with an optional title.
+# Training configuration
+TRAIN_TEST_SPLIT = 0.8
+CV_SPLITS = 5
+RANDOM_SEED = 42
+TARGET_COLUMN = "total_emissions_tco2e"
 
-    Tries to use `tabulate` for nicer formatting if available, otherwise falls back to
-    pandas' `to_string`. Shows only the first `max_rows` rows for brevity.
+# Set random seeds
+np.random.seed(RANDOM_SEED)
+random.seed(RANDOM_SEED)
+
+# ====================
+# HELPER FUNCTIONS
+# ====================
+
+
+def display_dataframe_to_user(title: str, df: pd.DataFrame, max_rows: int = 10) -> None:
+    """Print a DataFrame to the console with formatting.
+
+    Args:
+        title: Title to display above the DataFrame
+        df: DataFrame to display
+        max_rows: Maximum number of rows to show
     """
     print(f"\n=== {title} ===")
     try:
         from tabulate import tabulate
         print(tabulate(df.head(max_rows), headers="keys",
               tablefmt="psql", showindex=False))
-    except Exception:
-        # Fallback to pandas repr
+    except ImportError:
         print(df.head(max_rows).to_string(index=False))
     print(f"(shape: {df.shape})\n")
 
 
-np.random.seed(42)
-random.seed(42)
+def get_season(month: int) -> str:
+    """Convert month number to season (Northern Hemisphere).
 
-n = 1000
-org_ids = ['ORG001']
-facilities = ['Pune HQ', 'Mumbai Plant', 'Delhi Office',
-              'Bengaluru Lab', 'Hyderabad Warehouse']
-locations = ['Pune, IN', 'Mumbai, IN',
-             'Delhi, IN', 'Bengaluru, IN', 'Hyderabad, IN']
-fuel_types = ['Diesel', 'LPG', 'Natural Gas', 'Petrol', 'CNG']
-fuel_ef_map = {'Diesel': 2.68, 'LPG': 1.51,
-               'Natural Gas': 2.06, 'Petrol': 2.31, 'CNG': 2.75}
-suppliers = ['ABC Plastics', 'GreenSteel Co',
-             'LogiTrans', 'PackWise', 'ElectroParts']
-purchase_categories = ['Raw material', 'Logistics',
-                       'Packaging', 'Electronics', 'Services']
-category_ef = {'Raw material': 0.0008, 'Logistics': 0.0012,
-               'Packaging': 0.0006, 'Electronics': 0.0015, 'Services': 0.0004}
-vehicle_ids = [f'VEH{str(i).zfill(3)}' for i in range(1, 21)]
+    Args:
+        month: Month number (1-12)
 
-start = datetime(2024, 1, 1)
-end = datetime(2024, 12, 31)
-days = (end - start).days + 1
-dates = [start + timedelta(days=int(x))
-         for x in np.random.randint(0, days, size=n)]
+    Returns:
+        Season name
+    """
+    if month in [12, 1, 2]:
+        return 'Winter'
+    elif month in [3, 4, 5]:
+        return 'Spring'
+    elif month in [6, 7, 8]:
+        return 'Summer'
+    else:  # 9, 10, 11
+        return 'Autumn'
 
-rows = []
-for i in range(n):
-    facility_idx = np.random.randint(0, len(facilities))
-    facility = facilities[facility_idx]
-    loc = locations[facility_idx]
-    date = dates[i]
-    org = org_ids[0]
-    base_elec = {'Pune HQ': 2000, 'Mumbai Plant': 8000, 'Delhi Office': 1500,
-                 'Bengaluru Lab': 3500, 'Hyderabad Warehouse': 2500}
-    elec_kwh = max(0, np.random.normal(
-        loc=base_elec[facility], scale=base_elec[facility]*0.25))
-    renewable_kwh = round(elec_kwh * np.random.beta(1.5, 6.0), 2)
-    grid_ef = round(np.random.normal(0.82, 0.05), 3)
-    elec_cost = round(elec_kwh * np.random.normal(9.5, 1.2), 2)
-    fuel_type = np.random.choice(fuel_types, p=[0.4, 0.1, 0.15, 0.25, 0.1])
-    if np.random.rand() < 0.55:
-        fuel_consumed = round(abs(np.random.normal(
-            loc=50 if facility == 'Mumbai Plant' else 20, scale=25)), 2)
-    else:
-        fuel_consumed = 0.0
-    fuel_ef = fuel_ef_map[fuel_type]
-    generator_hours = round(np.random.exponential(
-        scale=2.0), 2) if fuel_consumed > 0 else 0.0
-    if np.random.rand() < 0.3:
-        vehicle = random.choice(vehicle_ids)
-        distance_km = round(abs(np.random.normal(loc=120, scale=80)), 2)
-        vehicle_fuel = round(
-            distance_km / np.random.normal(loc=10.0, scale=1.5), 2)
-    else:
-        vehicle = None
-        distance_km = 0.0
-        vehicle_fuel = 0.0
-    occupancy_rate = round(np.random.uniform(30, 95), 1)
-    if facility in ['Mumbai Plant', 'Bengaluru Lab']:
-        product_output = max(1, int(np.random.normal(
-            loc=15000 if facility == 'Mumbai Plant' else 6000, scale=3000)))
-    else:
-        product_output = int(np.random.normal(loc=800, scale=400))
-    product_output = max(0, product_output)
-    machine_runtime_hours = round(np.random.uniform(0, 24), 2)
-    equipment_power_kw = round(
-        np.random.choice([15, 45, 75, 100, 5, 25, 60]), 1)
-    temp = round(np.random.normal(28, 6), 1)
-    humidity = round(np.random.uniform(25, 85), 1)
-    weather = np.random.choice(['Sunny', 'Cloudy', 'Rainy', 'Humid', 'Windy'], p=[
-                               0.45, 0.2, 0.15, 0.15, 0.05])
-    occupancy_count = int(max(0, round(
-        product_output / np.random.uniform(20, 200), 0) + np.random.randint(1, 50)))
-    working_hours = round(np.random.choice(
-        [8, 9, 10, 12], p=[0.4, 0.3, 0.2, 0.1]), 2)
-    supplier = random.choice(suppliers)
-    category = random.choice(purchase_categories)
-    spend = round(abs(np.random.normal(loc=50000 if category ==
-                  'Raw material' else 15000, scale=30000)), 2)
-    cat_ef = category_ef[category]
-    scope2_t = round((elec_kwh - renewable_kwh) * grid_ef / 1000, 4)
-    scope1_t = round(fuel_consumed * fuel_ef / 1000, 4)
-    scope1_vehicle_t = round(
-        vehicle_fuel * fuel_ef_map.get('Diesel', 2.68) / 1000, 4) if vehicle_fuel > 0 else 0.0
-    scope3_t = round(spend * cat_ef / 1000, 4)
-    total_t = round(scope1_t + scope2_t + scope3_t + scope1_vehicle_t, 4)
-    emission_intensity = round(
-        total_t / product_output, 6) if product_output > 0 else 0.0
-    if np.random.rand() < 0.25:
-        rec_id = f'REC_{i:04d}'
-        action_type = np.random.choice(
-            ['Retrofit', 'Policy', 'Supplier change', 'Optimize HVAC', 'Route optimization'])
-        expected_reduction = round(total_t * np.random.uniform(0.05, 0.35), 4)
-        implementation_cost = round(
-            abs(np.random.normal(loc=50000, scale=40000)), 2)
-        roi_months = int(np.clip(np.random.normal(12, 8), 1, 60))
-        priority = np.random.choice(
-            ['High', 'Medium', 'Low'], p=[0.5, 0.35, 0.15])
-    else:
-        rec_id = None
-        action_type = None
-        expected_reduction = 0.0
-        implementation_cost = 0.0
-        roi_months = None
-        priority = None
-    predicted_next_month = round(total_t * np.random.uniform(0.95, 1.15), 4)
-    row = {
-        'organization_id': org,
-        'facility_name': facility,
-        'location': loc,
-        'date': date.date().isoformat(),
-        'electricity_consumption_kwh': round(elec_kwh, 2),
-        'renewable_energy_kwh': renewable_kwh,
-        'grid_emission_factor_kgco2_per_kwh': grid_ef,
-        'electricity_cost_inr': elec_cost,
-        'fuel_type': fuel_type,
-        'fuel_consumed_liters': fuel_consumed,
-        'fuel_emission_factor_kgco2_per_liter': fuel_ef,
-        'generator_runtime_hours': generator_hours,
-        'vehicle_id': vehicle,
-        'distance_travelled_km': distance_km,
-        'vehicle_fuel_consumed_liters': vehicle_fuel,
-        'occupancy_rate_percent': occupancy_rate,
-        'product_output_units': product_output,
-        'machine_runtime_hours': machine_runtime_hours,
-        'equipment_power_rating_kw': equipment_power_kw,
-        'temperature_celsius': temp,
-        'humidity_percent': humidity,
-        'weather_condition': weather,
-        'occupancy_count': occupancy_count,
-        'working_hours_per_day': working_hours,
-        'supplier_name': supplier,
-        'purchase_category': category,
-        'spend_amount_inr': round(spend, 2),
-        'category_emission_factor_kgco2_per_inr': cat_ef,
-        'scope_1_emissions_tco2e': scope1_t + scope1_vehicle_t,
-        'scope_2_emissions_tco2e': scope2_t,
-        'scope_3_emissions_tco2e': scope3_t,
-        'total_emissions_tco2e': total_t,
-        'emission_intensity_tco2e_per_unit': emission_intensity,
-        'recommendation_id': rec_id,
-        'action_type': action_type,
-        'expected_reduction_tco2e': expected_reduction,
-        'implementation_cost_inr': implementation_cost,
-        'roi_months': roi_months,
-        'priority_level': priority,
-        'predicted_emission_next_month_tco2e': predicted_next_month
-    }
-    rows.append(row)
 
-df = pd.DataFrame(rows)
+def extract_facility_type(facility_name: str) -> str:
+    """Extract facility type from facility name.
+
+    Args:
+        facility_name: Name of the facility
+
+    Returns:
+        Facility type category
+    """
+    type_keywords = ['HQ', 'Plant', 'Factory', 'Office', 'Lab',
+                     'Warehouse', 'Center', 'Centre', 'Facility', 'Unit']
+    for keyword in type_keywords:
+        if keyword in facility_name:
+            return 'Plant' if keyword == 'Factory' else keyword
+    return 'Other'
+
+
+def calculate_mape(y_true: np.ndarray, y_pred: np.ndarray, epsilon: float = 1e-10) -> float:
+    """Calculate Mean Absolute Percentage Error with numerical stability.
+
+    Args:
+        y_true: Actual values
+        y_pred: Predicted values
+        epsilon: Small constant to avoid division by zero
+
+    Returns:
+        MAPE as percentage
+    """
+    return np.mean(np.abs((y_true - y_pred) / np.clip(y_true, epsilon, None))) * 100
+
+
+def save_plot(fig: plt.Figure, filename: str, output_dir: str, dpi: int = 150) -> str:
+    """Save matplotlib figure to file.
+
+    Args:
+        fig: Matplotlib figure to save
+        filename: Output filename
+        output_dir: Output directory path
+        dpi: Resolution in dots per inch
+
+    Returns:
+        Full path to saved file
+    """
+    filepath = os.path.join(output_dir, filename)
+    fig.savefig(filepath, dpi=dpi, bbox_inches='tight')
+    plt.close(fig)
+    return filepath
+
+
+# ====================
+# LOAD DATASET
+# ====================
+
+logger.info("Loading synthetic dataset...")
+
+# Load the CSV generated by dataset_generator.py
+output_dir = os.path.dirname(os.path.abspath(__file__))
+csv_path = os.path.join(output_dir, 'ecosphere_synthetic.csv')
+
+if not os.path.exists(csv_path):
+    logger.error(f"Dataset not found at {csv_path}")
+    logger.info("Please run dataset_generator.py first to generate the dataset")
+    raise FileNotFoundError(f"Dataset not found: {csv_path}")
+
+df = pd.read_csv(csv_path)
+logger.info(f"Loaded dataset: {df.shape}")
+
+# Convert week_start_date to datetime (weekly data)
+if 'week_start_date' in df.columns:
+    df['date'] = pd.to_datetime(df['week_start_date'])
+    logger.info("Processing weekly aggregated data")
+elif 'date' in df.columns:
+    df['date'] = pd.to_datetime(df['date'])
+    logger.info("Processing daily data")
+else:
+    raise ValueError(
+        "Dataset must have either 'week_start_date' or 'date' column")
+
+# ====================
+# FEATURE ENGINEERING
+# ====================
+
+logger.info("Starting feature engineering...")
+
+# Extract temporal features
+df['month'] = df['date'].dt.month
+df['quarter'] = df['date'].dt.quarter
+df['week_of_year'] = df['date'].dt.isocalendar().week
+df['year'] = df['date'].dt.year
+df['season'] = df['month'].apply(get_season)
+df['facility_type'] = df['facility_name'].apply(extract_facility_type)
+
+# One-hot encode categorical features including new country and industry_sector
+categorical_cols = ['season', 'facility_type', 'country', 'industry_sector']
+df_encoded = pd.get_dummies(
+    df, columns=categorical_cols,
+    prefix=['season', 'fac_type', 'country', 'industry'])
+
+logger.info(f"Feature engineering complete. New shape: {df_encoded.shape}")
+logger.info(f"Categorical features encoded: {categorical_cols}")
 
 # Save CSV to backend/ folder (same directory as this script)
 output_dir = os.path.dirname(os.path.abspath(__file__))
@@ -214,38 +228,62 @@ except Exception as e:
 
 logger.info("Starting enhanced training pipeline...")
 
-# Define features and target
-features = [
-    "electricity_consumption_kwh",
-    "renewable_energy_kwh",
-    "fuel_consumed_liters",
-    "distance_travelled_km",
-    "spend_amount_inr",
-    "temperature_celsius",
-    "humidity_percent",
-    "occupancy_rate_percent",
-    "product_output_units",
-    "machine_runtime_hours",
-    "equipment_power_rating_kw"
+# Define base numerical features (weekly data)
+base_features = [
+    "electricity_consumption_kwh",  # Weekly total
+    "renewable_energy_kwh",  # Weekly total
+    "fuel_consumed_liters",  # Weekly total
+    "distance_travelled_km",  # Weekly total
+    "spend_amount_inr",  # Weekly total
+    "temperature_celsius",  # Weekly average
+    "humidity_percent",  # Weekly average
+    "occupancy_rate_percent",  # Weekly average
+    "product_output_units",  # Weekly total
+    "machine_runtime_hours",  # Weekly total
+    "equipment_power_rating_kw",
+    "employee_count",
+    # Temporal features for weekly data
+    "month",
+    "quarter",
+    "week_of_year",
+    "year"
 ]
+
+# Add one-hot encoded features
+season_cols = [col for col in df_encoded.columns if col.startswith('season_')]
+facility_cols = [
+    col for col in df_encoded.columns if col.startswith('fac_type_')]
+country_cols = [
+    col for col in df_encoded.columns if col.startswith('country_')]
+industry_cols = [
+    col for col in df_encoded.columns if col.startswith('industry_')]
+
+# Combine all features
+features = base_features + season_cols + \
+    facility_cols + country_cols + industry_cols
+
+logger.info(f"Total features: {len(features)} ({len(base_features)} numerical + "
+            f"{len(season_cols)} season + {len(facility_cols)} facility + "
+            f"{len(country_cols)} country + {len(industry_cols)} industry)")
+
 target = "total_emissions_tco2e"
 
 # Data cleaning and validation
-df = df[df[target].notna()].copy()
-df.sort_values('date', inplace=True)
-df.reset_index(drop=True, inplace=True)
+df_encoded = df_encoded[df_encoded[target].notna()].copy()
+df_encoded.sort_values('date', inplace=True)
+df_encoded.reset_index(drop=True, inplace=True)
 
 # Ensure all features exist
 for col in features:
-    if col not in df.columns:
-        df[col] = 0.0
+    if col not in df_encoded.columns:
+        df_encoded[col] = 0.0
         logger.warning(f"Feature '{col}' not found, filled with 0.0")
 
-logger.info(f"Dataset shape: {df.shape}, Features: {len(features)}")
+logger.info(f"Dataset shape: {df_encoded.shape}, Features: {len(features)}")
 
 # Extract features and target
-X = df[features].copy()
-y = df[target].copy().values
+X = df_encoded[features].copy()
+y = df_encoded[target].copy().values
 
 # Preprocessing pipeline with error handling
 try:
@@ -261,13 +299,13 @@ except Exception as e:
     raise
 
 # Temporal train/test split (respects time ordering)
-split_idx = int(len(df) * 0.8)
+split_idx = int(len(df) * TRAIN_TEST_SPLIT)
 X_train = X_scaled[:split_idx]
 X_test = X_scaled[split_idx:]
 y_train = y[:split_idx]
 y_test = y[split_idx:]
 
-logger.info(f"Train size: {len(X_train)}, Test size: {len(X_test)}")
+logger.info(f"Train size: {len(X_train):,}, Test size: {len(X_test):,}")
 
 # ====================
 # MODEL COMPARISON
@@ -275,29 +313,15 @@ logger.info(f"Train size: {len(X_train)}, Test size: {len(X_test)}")
 
 logger.info("Training multiple models for comparison...")
 
+# Initialize models with config
 models = {
-    'GradientBoosting': GradientBoostingRegressor(
-        n_estimators=100,
-        learning_rate=0.05,
-        max_depth=5,
-        random_state=42,
-        verbose=0
-    ),
-    'RandomForest': RandomForestRegressor(
-        n_estimators=100,
-        max_depth=10,
-        random_state=42,
-        n_jobs=-1,
-        verbose=0
-    ),
-    'Ridge': Ridge(
-        alpha=1.0,
-        random_state=42
-    )
+    'GradientBoosting': GradientBoostingRegressor(**MODEL_CONFIG['GradientBoosting']),
+    'RandomForest': RandomForestRegressor(**MODEL_CONFIG['RandomForest']),
+    'Ridge': Ridge(**MODEL_CONFIG['Ridge'])
 }
 
 # Cross-validation with TimeSeriesSplit
-tscv = TimeSeriesSplit(n_splits=5)
+tscv = TimeSeriesSplit(n_splits=CV_SPLITS)
 cv_results = {}
 
 for name, model in models.items():
@@ -337,13 +361,12 @@ except Exception as e:
 
 y_pred = best_model.predict(X_test)
 
+# Calculate metrics
 mae = mean_absolute_error(y_test, y_pred)
 mse = mean_squared_error(y_test, y_pred)
 rmse = np.sqrt(mse)
 r2 = r2_score(y_test, y_pred)
-
-# Calculate percentage errors
-mape = np.mean(np.abs((y_test - y_pred) / np.clip(y_test, 1e-10, None))) * 100
+mape = calculate_mape(y_test, y_pred)
 
 logger.info(
     f"Test Results - MAE: {mae:.4f}, RMSE: {rmse:.4f}, R²: {r2:.4f}, MAPE: {mape:.2f}%")
@@ -411,8 +434,8 @@ metrics_df = pd.DataFrame([{
 display_dataframe_to_user("Test Set Evaluation", metrics_df)
 
 # Sample predictions with confidence intervals
-sample_idx = rnd.sample(range(len(y_test)), k=min(10, len(y_test)))
-sample_df = df.iloc[split_idx:].iloc[sample_idx][[
+sample_idx = random.sample(range(len(y_test)), k=min(10, len(y_test)))
+sample_df = df_encoded.iloc[split_idx:].iloc[sample_idx][[
     'date', 'facility_name']].copy().reset_index(drop=True)
 sample_df['actual_tco2e'] = y_test[sample_idx]
 sample_df['predicted_tco2e'] = np.round(y_pred[sample_idx], 4)
